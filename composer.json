@@ -1,0 +1,8 @@
+{
+  "name": "sa/agent",
+  "description": "SA Autonomous AI Agent",
+  "type": "project",
+  "require": {
+    "php": ">=8.2"
+  }
+}

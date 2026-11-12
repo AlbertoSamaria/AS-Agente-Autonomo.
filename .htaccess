@@ -1,0 +1,3 @@
+<FilesMatch "^(\.env|composer\.(json|lock)|README\.md|schema\.sql)$">
+    Require all denied
+</FilesMatch>

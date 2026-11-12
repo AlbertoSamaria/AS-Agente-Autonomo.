@@ -1,0 +1,9 @@
+.composer{flex-wrap:wrap}
+.composer textarea{flex:1 1 100%}
+.composer-tools{display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;min-width:0}
+.tool-btn{border:1px solid #303a57;background:#121a2e;color:#cfd7ea;border-radius:9px;padding:8px 11px;font-size:12px;cursor:pointer}
+.tool-btn:hover,.tool-btn.active{background:#24304d;border-color:#53658d;color:#fff}
+.tool-btn:disabled{opacity:.6;cursor:wait}
+.composer-tools #uploadStatus{flex:1 1 100%;min-height:14px;color:#8d99b8;font-size:11px}
+.composer #sendBtn{min-height:38px}
+@media(max-width:480px){.composer-tools{gap:6px}.tool-btn{padding:8px;font-size:11px}}
