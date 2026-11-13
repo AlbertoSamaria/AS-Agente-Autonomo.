@@ -7,20 +7,28 @@ final class DocumentProcessor {
     public function process(int $documentId): array {
         $s=db()->prepare("SELECT * FROM documents WHERE id=?");$s->execute([$documentId]);$d=$s->fetch();
         if(!$d) throw new RuntimeException('Documento inexistente.');
-        $path=dirname(__DIR__,2).'/uploads/'.$d['stored_name'];
-        $text=$this->extract($path,$d['mime_type']);
-        $text=preg_replace('/\s+/u',' ',trim($text));
-        if($text==='') throw new RuntimeException('Não foi possível extrair texto.');
-        $chunks=$this->chunk($text,1200,180);
         db()->prepare("UPDATE documents SET status='processing',error_message=NULL WHERE id=?")->execute([$documentId]);
-        db()->prepare("DELETE FROM document_chunks WHERE document_id=?")->execute([$documentId]);
-        $emb=new EmbeddingService();
-        foreach($chunks as $i=>$chunk){
-            $vector=$emb->embed($chunk);
-            db()->prepare("INSERT INTO document_chunks(document_id,chunk_index,content,embedding_json) VALUES(?,?,?,?)")->execute([$documentId,$i,$chunk,json_encode($vector)]);
+        try {
+            $path=dirname(__DIR__,2).'/uploads/'.$d['stored_name'];
+            $text=$this->extract($path,$d['mime_type']);
+            $text=preg_replace('/[ \t]+/u',' ',str_replace(["\r\n","\r"],"\n",trim($text)));
+            if($text==='') throw new RuntimeException('Não foi possível extrair texto.');
+            $chunks=$this->chunk($text,1200,180);
+            db()->prepare("DELETE FROM document_chunks WHERE document_id=?")->execute([$documentId]);
+            $emb=new EmbeddingService();
+            $insert=db()->prepare("INSERT INTO document_chunks(document_id,chunk_index,content,embedding_json) VALUES(?,?,?,?)");
+            foreach($chunks as $i=>$chunk){
+                $vector=$emb->embed($chunk);
+                $insert->execute([$documentId,$i,$chunk,json_encode($vector,JSON_THROW_ON_ERROR)]);
+            }
+            db()->prepare("UPDATE documents SET status='ready',error_message=NULL WHERE id=?")->execute([$documentId]);
+            return ['success'=>true,'chunks'=>count($chunks)];
+        } catch (Throwable $error) {
+            db()->prepare("DELETE FROM document_chunks WHERE document_id=?")->execute([$documentId]);
+            db()->prepare("UPDATE documents SET status='failed',error_message=? WHERE id=?")
+                ->execute([mb_substr($error->getMessage(),0,2000),$documentId]);
+            throw $error;
         }
-        db()->prepare("UPDATE documents SET status='ready' WHERE id=?")->execute([$documentId]);
-        return ['success'=>true,'chunks'=>count($chunks)];
     }
     private function extract(string $path,string $mime): string {
         if(str_contains($mime,'text/plain')||str_contains($mime,'text/csv')) return (string)file_get_contents($path);
@@ -46,7 +54,24 @@ final class DocumentProcessor {
     }
     private function chunk(string $text,int $size,int $overlap): array {
         $out=[];$len=mb_strlen($text);$start=0;
-        while($start<$len){$out[]=mb_substr($text,$start,$size);$start += max(1,$size-$overlap);}
+        while($start<$len){
+            $chunk=mb_substr($text,$start,$size);
+            $chunkLength=mb_strlen($chunk);
+            $end=$start+$chunkLength;
+            if($end<$len){
+                $boundary=mb_strrpos($chunk,"\n");
+                if($boundary===false||$boundary<(int)($size*0.65)){
+                    $boundary=mb_strrpos($chunk," ");
+                }
+                if($boundary!==false&&$boundary>=(int)($size*0.65)){
+                    $chunk=mb_substr($chunk,0,$boundary);
+                    $chunkLength=mb_strlen($chunk);
+                }
+            }
+            $chunk=trim($chunk);
+            if($chunk!=='')$out[]=$chunk;
+            $start+=max(1,$chunkLength-$overlap);
+        }
         return $out;
     }
 }

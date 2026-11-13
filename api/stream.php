@@ -1,62 +1,126 @@
 <?php
 declare(strict_types=1);
-require_once dirname(__DIR__).'/config/config.php';
-require_once dirname(__DIR__).'/middleware/RBAC.php';
-require_once dirname(__DIR__).'/services/ai/Ollama.php';
-require_once dirname(__DIR__).'/services/ai/LlamaCpp.php';
+require_once dirname(__DIR__) . '/config/config.php';
+require_once dirname(__DIR__) . '/middleware/RBAC.php';
+require_once dirname(__DIR__) . '/services/agent/Agent.php';
+require_once dirname(__DIR__) . '/services/security/RateLimiter.php';
 
-try{
+try {
+    require_post();
+    Auth::requireCsrf();
     RBAC::require('chat');
-    $d=json_decode(file_get_contents('php://input'),true)?:[];
-    $messages=$d['messages']??[];
-    if(!$messages) throw new RuntimeException('Mensagens ausentes.');
-    $provider=strtolower((string)env('LLM_PROVIDER','ollama'));
-    if(!in_array($provider,['ollama','llama.cpp'],true)) throw new RuntimeException('Fornecedor de modelos não suportado: '.$provider);
-    header('Content-Type: text/event-stream; charset=utf-8');
-    header('Cache-Control: no-cache');
-    header('X-Accel-Buffering: no');
-    if($provider==='llama.cpp'){
-        $url=rtrim((string)env('LLAMACPP_BASE_URL','http://127.0.0.1:8080'),'/').'/v1/chat/completions';
-        $payload=json_encode(['model'=>env('LLAMACPP_MODEL','local-model'),'messages'=>$messages,'stream'=>true,'temperature'=>0.35],JSON_UNESCAPED_UNICODE);
-    }else{
-        $url=(string)env('OLLAMA_API_URL');
-        $payload=json_encode(['model'=>env('OLLAMA_MODEL','qwen2.5:1.5b'),'messages'=>$messages,'stream'=>true],JSON_UNESCAPED_UNICODE);
+    $user = Auth::requireLogin();
+    if (!(new RateLimiter())->allow(
+        'chat',
+        30,
+        60,
+        RateLimiter::identity((int) $user['id'])
+    )) {
+        json_response(['success' => false, 'error' => 'Limite de mensagens atingido. Tenta novamente dentro de um minuto.'], 429);
     }
-    if($payload===false) throw new RuntimeException('Não foi possível preparar o pedido de streaming.');
-    $ch=curl_init($url);
-    if($ch===false) throw new RuntimeException('Não foi possível inicializar o cliente HTTP.');
-    $buffer='';
-    curl_setopt_array($ch,[
-        CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,
-        CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>(int)env($provider==='llama.cpp'?'LLAMACPP_TIMEOUT':'OLLAMA_TIMEOUT',120),
-        CURLOPT_WRITEFUNCTION=>function($ch,$chunk) use (&$buffer,$provider){
-            $buffer.=$chunk;
-            while(($newline=strpos($buffer,"\n"))!==false){
-                $line=trim(substr($buffer,0,$newline));
-                $buffer=substr($buffer,$newline+1);
-                if($line==='') continue;
-                if($provider==='llama.cpp'){
-                    if(!str_starts_with($line,'data:')) continue;
-                    $line=trim(substr($line,5));
-                    if($line==='[DONE]'){echo "data: [DONE]\n\n";@ob_flush();@flush();continue;}
-                }
-                $data=json_decode($line,true);
-                $content=$provider==='llama.cpp'
-                    ?($data['choices'][0]['delta']['content']??null)
-                    :($data['message']['content']??null);
-                if(is_string($content)) echo "data: ".json_encode(['content'=>$content],JSON_UNESCAPED_UNICODE)."\n\n";
-                if($provider==='ollama'&&!empty($data['done'])) echo "data: [DONE]\n\n";
-                @ob_flush(); @flush();
-            }
-            return strlen($chunk);
+    $data = json_decode((string) file_get_contents('php://input'), true);
+    if (!is_array($data)) {
+        json_response(['success' => false, 'error' => 'Pedido inválido.'], 400);
+    }
+
+    $input = trim((string) ($data['message'] ?? ''));
+    if ($input === '' || mb_strlen($input) > 12000) {
+        json_response(['success' => false, 'error' => 'A mensagem deve ter entre 1 e 12000 caracteres.'], 422);
+    }
+
+    $conversationId = (int) ($data['conversation_id'] ?? 0);
+    if ($conversationId <= 0) {
+        $statement = db()->prepare(
+            'INSERT INTO conversations(user_id,title) VALUES(?,?)'
+        );
+        $statement->execute([(int) $user['id'], mb_substr($input, 0, 60)]);
+        $conversationId = (int) db()->lastInsertId();
+    } else {
+        $owner = db()->prepare(
+            'SELECT id FROM conversations WHERE id = ? AND user_id = ? LIMIT 1'
+        );
+        $owner->execute([$conversationId, (int) $user['id']]);
+        if (!$owner->fetchColumn()) {
+            json_response(['success' => false, 'error' => 'Conversa não encontrada.'], 404);
         }
-    ]);
-    $result=curl_exec($ch);
-    $curlError=curl_error($ch);
-    $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if($result===false||$status>=400) throw new RuntimeException($result===false?'Erro no streaming: '.$curlError:'Servidor de modelos retornou HTTP '.$status);
-}catch(Throwable $e){
-    if(!headers_sent()) header('Content-Type: text/event-stream; charset=utf-8');
-    echo "data: ".json_encode(['error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE)."\n\n";
+    }
+
+    $ids = $data['document_ids'] ?? [];
+    if (!is_array($ids) || count($ids) > 20) {
+        json_response(['success' => false, 'error' => 'Lista de documentos inválida.'], 422);
+    }
+    $documentIds = array_values(array_unique(array_filter(
+        array_map('intval', $ids),
+        static fn(int $id): bool => $id > 0
+    )));
+    if ($documentIds !== []) {
+        RBAC::require('rag.read');
+        $placeholders = implode(',', array_fill(0, count($documentIds), '?'));
+        $documents = db()->prepare(
+            "SELECT id
+             FROM documents
+             WHERE user_id = ? AND status = 'ready' AND id IN ($placeholders)"
+        );
+        $documents->execute(array_merge([(int) $user['id']], $documentIds));
+        $validIds = array_map('intval', $documents->fetchAll(PDO::FETCH_COLUMN));
+        if (count($validIds) !== count($documentIds)) {
+            json_response(['success' => false, 'error' => 'Um ou mais ficheiros não estão disponíveis na tua biblioteca.'], 403);
+        }
+        $documentIds = $validIds;
+    }
+
+    header('Content-Type: text/event-stream; charset=utf-8');
+    header('Cache-Control: no-cache, no-store');
+    header('X-Accel-Buffering: no');
+    header('X-Content-Type-Options: nosniff');
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+    flush();
+
+    $agent = new Agent();
+    $agent->saveMessage($conversationId, 'user', $input);
+    $streamed = '';
+    $result = $agent->run(
+        $input,
+        $conversationId,
+        (int) $user['id'],
+        $documentIds,
+        static function (string $token) use (&$streamed): void {
+            $streamed .= $token;
+            echo 'data: ' . json_encode(
+                ['content' => $token],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ) . "\n\n";
+            flush();
+        }
+    );
+
+    if ($result['success'] && !isset($result['approval_id'])) {
+        $agent->saveMessage($conversationId, 'assistant', $result['content']);
+    }
+    if ($streamed === '' && !empty($result['content'])) {
+        echo 'data: ' . json_encode(
+            ['content' => $result['content']],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ) . "\n\n";
+    }
+    echo 'data: ' . json_encode([
+        'done' => true,
+        'success' => (bool) $result['success'],
+        'conversation_id' => $conversationId,
+        'error' => $result['error'] ?? null,
+        'approval_id' => $result['approval_id'] ?? null,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+    flush();
+} catch (Throwable $error) {
+    error_log('[SA Stream] ' . $error->getMessage());
+    if (!headers_sent()) {
+        json_response(['success' => false, 'error' => 'Não foi possível iniciar o streaming.'], 500);
+    }
+    echo 'data: ' . json_encode(
+        ['error' => 'Não foi possível concluir o streaming.'],
+        JSON_UNESCAPED_UNICODE
+    ) . "\n\n";
+    flush();
 }

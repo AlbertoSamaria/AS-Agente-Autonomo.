@@ -6,6 +6,7 @@ require_once __DIR__ . '/TaskTool.php';
 require_once __DIR__ . '/WebTool.php';
 require_once __DIR__ . '/FileTool.php';
 require_once __DIR__ . '/SqlTool.php';
+require_once dirname(__DIR__) . '/planner/Planner.php';
 
 final class ToolRegistry
 {
@@ -13,6 +14,7 @@ final class ToolRegistry
         'task.create',
         'task.list',
         'task.complete',
+        'plan.create',
         'web.get',
         'web.search',
         'files.list',
@@ -24,7 +26,7 @@ final class ToolRegistry
         return in_array($tool, self::ALLOWED_TOOLS, true);
     }
 
-    public function execute(string $tool, array $args): array
+    public function execute(string $tool, array $args, int $userId): array
     {
         if (!$this->isAllowed($tool)) {
             return [
@@ -34,12 +36,16 @@ final class ToolRegistry
         }
 
         return match ($tool) {
-            'task.create' => (new TaskTool())->create($args),
-            'task.list' => (new TaskTool())->list($args),
-            'task.complete' => (new TaskTool())->complete($args),
+            'task.create' => (new TaskTool())->create($args, $userId),
+            'task.list' => (new TaskTool())->list($args, $userId),
+            'task.complete' => (new TaskTool())->complete($args, $userId),
+            'plan.create' => (new Planner())->createAndPersist(
+                (string) ($args['goal'] ?? ''),
+                $userId
+            ),
             'web.get' => (new WebTool())->get((string) ($args['url'] ?? '')),
             'web.search' => (new WebTool())->search((string) ($args['query'] ?? '')),
-            'files.list' => (new FileTool())->listUploads(),
+            'files.list' => (new FileTool())->listUploads($userId),
             'sql.read' => (new SqlTool())->read((string) ($args['sql'] ?? '')),
             default => [
                 'success' => false,
@@ -51,7 +57,7 @@ final class ToolRegistry
     public function permission(string $tool): string
     {
         return match ($tool) {
-            'task.create', 'task.complete' => 'tasks.write',
+            'task.create', 'task.complete', 'plan.create' => 'tasks.write',
             'task.list' => 'tasks.read',
             'web.get', 'web.search' => 'tools.web',
             'files.list' => 'tools.files',

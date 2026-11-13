@@ -18,6 +18,30 @@ CREATE TABLE IF NOT EXISTS roles_permissions (
     PRIMARY KEY(role, permission)
 );
 
+CREATE TABLE IF NOT EXISTS user_permissions (
+    user_id BIGINT UNSIGNED NOT NULL,
+    permission VARCHAR(80) NOT NULL,
+    granted TINYINT(1) NOT NULL DEFAULT 1,
+    PRIMARY KEY(user_id, permission),
+    CONSTRAINT fk_user_permission_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NULL,
+    target_user_id BIGINT UNSIGNED NULL,
+    action VARCHAR(120) NOT NULL,
+    status ENUM('success','failed','warning') NOT NULL DEFAULT 'success',
+    ip_address VARCHAR(45) NULL,
+    user_agent TEXT NULL,
+    details_json JSON NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_user(user_id, created_at),
+    INDEX idx_audit_target(target_user_id, created_at),
+    CONSTRAINT fk_audit_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_audit_target_user FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
 INSERT IGNORE INTO roles_permissions(role,permission) VALUES
 ('admin','*'),
 ('manager','chat'),('manager','tasks.read'),('manager','tasks.write'),('manager','memory.read'),('manager','memory.write'),
@@ -200,6 +224,14 @@ CREATE TABLE IF NOT EXISTS model_registry (
     priority INT NOT NULL DEFAULT 100,
     enabled TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS request_limits (
+    bucket_key CHAR(64) NOT NULL,
+    window_start BIGINT UNSIGNED NOT NULL,
+    requests INT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY(bucket_key,window_start),
+    INDEX idx_request_limits_window(window_start)
 );
 
 INSERT IGNORE INTO model_registry(provider,model_name,purpose,priority) VALUES

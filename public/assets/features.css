@@ -7,3 +7,48 @@
 .composer-tools #uploadStatus{flex:1 1 100%;min-height:14px;color:#8d99b8;font-size:11px}
 .composer #sendBtn{min-height:38px}
 @media(max-width:480px){.composer-tools{gap:6px}.tool-btn{padding:8px;font-size:11px}}
+
+.side-nav{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.conversation-history .side-title{margin:0 0 9px}
+.conversation-list{display:flex;flex-direction:column;gap:4px;max-height:min(28vh,240px);overflow-y:auto}
+.conversation-list-status{margin:4px 0;padding:7px 8px;color:#7785a3;font-size:11px}
+.conversation-list-status.error{color:#ff9d96}
+.conversation-item{width:100%;overflow:hidden;padding:9px 10px;border:1px solid transparent;border-radius:8px;background:transparent;color:#aeb9d1;text-align:left;text-overflow:ellipsis;white-space:nowrap;font-size:12px;cursor:pointer}
+.conversation-item:hover,.conversation-item.active{border-color:#273451;background:#121a2e;color:#fff}
+.side-nav-item{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:#b8c1d8;text-align:left;font-size:14px;cursor:pointer}
+.side-nav-item:hover,.side-nav-item.active{background:#121a2e;border-color:#273451;color:#fff}
+.side-nav-item:focus-visible,.close-navigation-panel:focus-visible,.navigation-primary:focus-visible{outline:2px solid #8daeff;outline-offset:2px}
+.side-nav-icon{display:inline-grid;place-items:center;width:20px;color:#9eadd0;font-size:18px}
+.side-nav-item.new-chat{justify-content:flex-start;margin:0 0 7px;padding:11px 12px;border:1px solid #303a57}
+.navigation-panel{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(3,7,16,.72)}
+.navigation-panel-card{width:min(620px,100%);max-height:min(760px,calc(100vh - 40px));overflow:auto;border:1px solid #2b395a;border-radius:18px;background:#0d1425;box-shadow:0 25px 70px rgba(0,0,0,.5)}
+.navigation-panel-header{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #24304d;background:#0d1425}
+.navigation-panel-header h2{margin:0;font-size:19px}
+.close-navigation-panel{width:36px;height:36px;border:0;border-radius:9px;background:transparent;color:#dfe9ff;font-size:27px;cursor:pointer}
+.close-navigation-panel:hover{background:#1b2742}
+.navigation-panel-content{padding:20px}
+.navigation-panel-view h3{margin:12px 0 8px}
+.navigation-panel-view p,.navigation-panel-description{color:#9ba8c4;font-size:13px;line-height:1.6}
+.navigation-empty-icon{display:grid;place-items:center;width:46px;height:46px;border:1px solid #303d5c;border-radius:13px;background:#121a2e;color:#b7c8ee;font-size:22px}
+.navigation-primary{margin-top:8px;padding:10px 13px;border:1px solid #495a7b;border-radius:9px;background:#1a2742;color:#edf4ff;font-weight:600;cursor:pointer}
+.plugin-list{display:flex;flex-direction:column;gap:9px;margin:18px 0 0;padding:0;list-style:none}
+.plugin-list li{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px;border:1px solid #273451;border-radius:10px;background:#111b2f}
+.plugin-list li span{color:#edf2ff;font-size:13px}
+.plugin-list li small{color:#9fb0d1;text-align:right;font-size:11px}
+.library-panel{display:block;color:#eaf0ff}
+.library-panel>strong{display:block;margin-bottom:14px}
+.library-panel>p{color:#9ba8c4;font-size:13px}
+.library-list{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.library-item{display:flex;align-items:center;gap:10px;padding:11px;border:1px solid #273451;border-radius:9px;background:#111b2f}
+.library-item span{flex:1;overflow-wrap:anywhere;font-size:13px}
+.library-item small{color:#9ba8c4;font-size:11px}
+.library-add{padding:10px 13px;border:1px solid #495a7b;border-radius:9px;background:#1a2742;color:#edf4ff;cursor:pointer}
+.bubble{white-space:pre-wrap}
+.app.sidebar-open:after{position:fixed;inset:0;z-index:45;background:rgba(3,7,16,.62);content:""}
+@media(max-width:720px){
+ .sidebar{position:fixed;inset:0 auto 0 0;z-index:50;display:flex;width:min(300px,85vw);transform:translateX(-105%);transition:transform .2s ease;box-shadow:18px 0 45px rgba(0,0,0,.35)}
+ .sidebar.open{transform:translateX(0)}
+ .navigation-panel{padding:12px}
+ .navigation-panel-card{max-height:calc(100vh - 24px)}
+ .navigation-panel-content{padding:16px}
+}
