@@ -32,10 +32,13 @@ Para execução permanente no Windows, usar Task Scheduler ou um serviço dedica
 O SA pode usar o Ollama (padrão) ou um servidor `llama.cpp` para o chat. Descarrega/compila o `llama-server` e inicia-o localmente, apontando para um modelo GGUF:
 
 ```powershell
-llama-server.exe -m C:\models\modelo.gguf --host 127.0.0.1 --port 8080 -c 4096
+& "C:\llama.cpp\b12317\llama-server.exe" `
+  -m "C:\models\qwen2.5-1.5b-instruct-q4_k_m.gguf" `
+  --alias local-model --host 127.0.0.1 --port 8080 -c 4096 `
+  --threads 4 --repeat-penalty 1.18
 ```
 
-No `.env`, configura `LLM_PROVIDER=llama.cpp`, `LLAMACPP_BASE_URL=http://127.0.0.1:8080` e, se necessário, `LLAMACPP_MODEL=local-model`. O nome do modelo é normalmente ignorado pelo servidor local, mas é enviado no formato compatível com OpenAI. O serviço de embeddings continua a usar o Ollama (`OLLAMA_EMBEDDING_MODEL`).
+No `.env`, configura `LLM_PROVIDER=llama.cpp`, `LLAMACPP_BASE_URL=http://127.0.0.1:8080` e `LLAMACPP_MODEL=local-model`. O parâmetro `--alias local-model` faz coincidir o nome enviado pelo ModelRouter com o alias anunciado pelo servidor. O serviço de embeddings continua a usar o Ollama (`OLLAMA_EMBEDDING_MODEL`).
 
 Por padrão, se o fornecedor principal falhar, o ModelRouter tenta o fornecedor alternativo. Configura `LLM_FALLBACK_ENABLED=false` para desativar ou define `LLM_FALLBACK_PROVIDER` para escolher explicitamente o secundário. O streaming segue a mesma ordem, mas não repete o pedido noutro fornecedor se já tiver enviado tokens ao cliente.
 
@@ -50,6 +53,10 @@ As respostas baseadas nesses trechos incluem marcadores como `[D1]` e uma lista 
 As memórias são consultadas apenas para o utilizador a que pertencem e as novas entradas são gravadas com o respetivo `user_id`. Registos antigos sem proprietário não são incluídos no contexto de nenhum utilizador. Para guardar uma memória, escreve, por exemplo, `Lembra-te que prefiro respostas curtas`. A função requer a permissão `memory.write`.
 
 O Context Manager limita o histórico enviado ao modelo; configura `AGENT_CONTEXT_MAX_CHARS` para ajustar o orçamento aproximado de caracteres.
+
+Ollama e llama.cpp usam parâmetros explícitos de temperatura, top-p e penalização de repetição. Para llama.cpp, `LLAMACPP_REPEAT_PENALTY`, `LLAMACPP_FREQUENCY_PENALTY`, `LLAMACPP_PRESENCE_PENALTY` e `LLAMACPP_MAX_TOKENS` podem ser ajustados no `.env`. O Agent também remove linhas e frases exactamente duplicadas antes de guardar ou apresentar a resposta, preservando blocos de código e tabelas Markdown. Isto reduz ciclos visíveis, mas não substitui um modelo maior quando a capacidade do modelo 1.5B é insuficiente.
+
+A interface inclui temas claro e escuro, com preferência guardada localmente no navegador.
 
 ## Planos e tarefas
 O planner valida títulos, prioridades e dependências, rejeita ciclos e grava tarefas e dependências numa transação, associadas à conta que pediu o plano. Consultas e alterações de tarefas também são limitadas ao proprietário.

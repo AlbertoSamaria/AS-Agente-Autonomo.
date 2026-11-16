@@ -97,6 +97,12 @@ final class Agent
 
             $system = 'És o SA, um agente autónomo pessoal.
 Responde sempre em português.
+Responde de forma natural, clara e coerente; ajusta o detalhe à pergunta.
+Não repitas frases, exemplos, parágrafos ou itens de listas.
+Não cries listas longas só para preencher espaço; usa apenas a quantidade de pontos necessária.
+Não reformules a mesma ideia várias vezes. Se já respondeste ao ponto, avança.
+Evita frases feitas, introduções genéricas e conclusões artificiais.
+Responde directamente ao pedido; quando não souberes, diz claramente o que não sabes.
 
 REGRAS PRINCIPAIS:
 1. Responde normalmente a saudações, perguntas, explicações e pedidos de informação.
@@ -244,6 +250,7 @@ Produz uma resposta normal, clara e útil.';
                         $content,
                         $documentContext
                     );
+                    $content = $this->cleanRepeatedContent($content);
 
                     $this->finishRun(
                         $runId,
@@ -374,6 +381,7 @@ Produz uma resposta normal, clara e útil.';
                     $documentContext
                 );
             }
+            $content = $this->cleanRepeatedContent($content);
 
             $this->finishRun(
                 $runId,
@@ -581,58 +589,144 @@ Produz uma resposta normal, clara e útil.';
         string $purpose
     ): array {
         $router = new ModelRouter();
+
         if ($onToken === null || !$allowStreaming) {
-            return $router->chat($messages, $purpose);
+            $response = $router->chat($messages, $purpose);
+            $content = trim((string) ($response['message']['content'] ?? ''));
+            $response['message']['content'] = $this->cleanRepeatedContent($content);
+            return $response;
         }
 
-        $buffer = '';
-        $decisionMade = false;
-        $suppress = false;
+        /*
+         * Guardamos os tokens até ao fim para poder remover repetições
+         * antes de as enviar ao browser. A resposta continua a usar o
+         * endpoint SSE, mas é enviada como um bloco final validado.
+         */
+        $raw = '';
         $response = $router->chatStream(
             $messages,
-            static function (string $token) use (
-                &$buffer,
-                &$decisionMade,
-                &$suppress,
-                $onToken
-            ): void {
-                if ($decisionMade) {
-                    if (!$suppress) {
-                        $onToken($token);
-                    }
-                    return;
-                }
-
-                $buffer .= $token;
-                $candidate = ltrim($buffer);
-                if ($candidate === '') {
-                    return;
-                }
-
-                if (str_starts_with($candidate, '{')) {
-                    $decisionMade = true;
-                    $suppress = true;
-                    return;
-                }
-
-                if (str_starts_with($candidate, '```')) {
-                    $decisionMade = true;
-                    $suppress = true;
-                    return;
-                }
-
-                $decisionMade = true;
-                $onToken($buffer);
-                $buffer = '';
+            static function (string $token) use (&$raw): void {
+                $raw .= $token;
             },
             $purpose
         );
 
-        if (!$decisionMade && $buffer !== '') {
-            $onToken($buffer);
+        $content = trim((string) ($response['message']['content'] ?? $raw));
+        if ($content === '') {
+            $content = $raw;
+        }
+        $content = $this->cleanRepeatedContent($content);
+        $response['message']['content'] = $content;
+
+        if ($content !== '') {
+            $onToken($content);
         }
 
         return $response;
+    }
+
+    /**
+     * Remove linhas e frases duplicadas que modelos pequenos podem gerar
+     * em ciclos. Mantém a primeira ocorrência e renumera listas numeradas.
+     */
+    private function cleanRepeatedContent(string $content): string
+    {
+        $content = trim(str_replace(["\r\n", "\r"], "\n", $content));
+        if ($content === '') {
+            return '';
+        }
+
+        $lines = explode("\n", $content);
+        $seen = [];
+        $clean = [];
+        $insideCodeFence = false;
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+
+            if (preg_match('/^\s*```/', $trimmed) === 1) {
+                $clean[] = $line;
+                $insideCodeFence = !$insideCodeFence;
+                continue;
+            }
+
+            // Nunca alterar blocos de código nem linhas de tabelas Markdown.
+            if ($insideCodeFence || str_starts_with($trimmed, '|')) {
+                $clean[] = $line;
+                continue;
+            }
+
+            if ($trimmed === '') {
+                if ($clean !== [] && trim((string) end($clean)) !== '') {
+                    $clean[] = '';
+                }
+                continue;
+            }
+
+            $comparable = preg_replace('/^[ \t]*(?:\d+[.)]|[-*•])[ \t]*/u', '', $trimmed) ?? $trimmed;
+            $comparable = trim($comparable, " \t\n\r\0\x0B\"'“”‘’");
+            $comparable = function_exists('mb_strtolower') ? mb_strtolower($comparable) : strtolower($comparable);
+            $comparable = preg_replace('/[[:punct:]]+/u', '', $comparable) ?? $comparable;
+            $comparable = preg_replace('/\s+/u', ' ', $comparable) ?? $comparable;
+
+            if ($comparable !== '' && isset($seen[$comparable])) {
+                continue;
+            }
+            if ($comparable !== '') {
+                $seen[$comparable] = true;
+            }
+
+            // Remove frases inteiras repetidas dentro da mesma linha.
+            $parts = preg_split('/(?<=[.!?])\s+/u', $trimmed) ?: [$trimmed];
+            if (count($parts) > 1) {
+                $sentenceSeen = [];
+                $uniqueParts = [];
+                foreach ($parts as $part) {
+                    $sentenceKey = trim($part, " \t\n\r\0\x0B\"'“”‘’");
+                    $sentenceKey = function_exists('mb_strtolower') ? mb_strtolower($sentenceKey) : strtolower($sentenceKey);
+                    $sentenceKey = preg_replace('/[[:punct:]]+/u', '', $sentenceKey) ?? $sentenceKey;
+                    $sentenceKey = preg_replace('/\s+/u', ' ', $sentenceKey) ?? $sentenceKey;
+                    if ($sentenceKey !== '' && isset($sentenceSeen[$sentenceKey])) {
+                        continue;
+                    }
+                    if ($sentenceKey !== '') {
+                        $sentenceSeen[$sentenceKey] = true;
+                    }
+                    $uniqueParts[] = trim($part);
+                }
+                $trimmed = implode(' ', $uniqueParts);
+            }
+
+            $clean[] = $trimmed;
+        }
+
+        // Renumera listas fora de blocos de código, depois de remover itens repetidos.
+        $number = 0;
+        $insideCodeFence = false;
+        foreach ($clean as $index => $line) {
+            if (preg_match('/^\s*```/', trim($line)) === 1) {
+                $insideCodeFence = !$insideCodeFence;
+                continue;
+            }
+            if ($insideCodeFence) {
+                continue;
+            }
+            if (trim($line) === '') {
+                $number = 0;
+                continue;
+            }
+            if (preg_match('/^([ \t]*)\d+[.)]([ \t]+)/u', $line, $match) === 1) {
+                $number++;
+                $clean[$index] = $match[1] . $number . '.' . $match[2] .
+                    preg_replace('/^([ \t]*)\d+[.)]([ \t]+)/u', '', $line, 1);
+            } elseif (preg_match('/^[ \t]*[-*•][ \t]+/u', $line) !== 1) {
+                $number = 0;
+            }
+        }
+
+        $result = implode("\n", $clean);
+        $result = preg_replace("/\n{3,}/u", "\n\n", $result) ?? $result;
+        return trim($result);
     }
 
     private function appendDocumentCitations(

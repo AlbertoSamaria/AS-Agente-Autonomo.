@@ -16,6 +16,8 @@ $canSearchWeb = $user && RBAC::can('tools.web');
 $canReadTasks = $user && RBAC::can('tasks.read');
 $canWriteTasks = $user && RBAC::can('tasks.write');
 $canReadSql = $user && RBAC::can('tools.sql.read');
+$canReadMemories = $user && RBAC::can('memory.read');
+$canWriteMemories = $user && RBAC::can('memory.write');
 
 ?>
 <!doctype html>
@@ -29,6 +31,7 @@ $canReadSql = $user && RBAC::can('tools.sql.read');
 
     <link rel="stylesheet" href="public/assets/app.css">
     <link rel="stylesheet" href="public/assets/features.css">
+    <link rel="stylesheet" href="public/assets/theme.css">
 </head>
 
 <body>
@@ -41,6 +44,7 @@ $canReadSql = $user && RBAC::can('tools.sql.read');
 
         <div class="login-card">
 
+            <button id="themeToggleLogin" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">☀️</button>
             <div class="welcome-logo">SA</div>
 
             <h1>SA</h1>
@@ -109,6 +113,12 @@ $canReadSql = $user && RBAC::can('tools.sql.read');
                 <button id="navLibrary" class="side-nav-item" type="button" data-panel="library">
                     <span class="side-nav-icon" aria-hidden="true">▤</span>
                     <span>Biblioteca</span>
+                </button>
+                <?php endif; ?>
+                <?php if ($canReadMemories): ?>
+                <button id="navMemories" class="side-nav-item" type="button" data-panel="memories">
+                    <span class="side-nav-icon" aria-hidden="true">🧠</span>
+                    <span>Memórias</span>
                 </button>
                 <?php endif; ?>
                 <?php if ($canReadTasks): ?>
@@ -221,6 +231,10 @@ $canReadSql = $user && RBAC::can('tools.sql.read');
                     </span>
 
                 </div>
+
+                <button id="themeToggle" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">
+                    ☀️
+                </button>
 
                 <?php if ($user): ?>
                     <?php if ($isAdmin): ?>
@@ -409,6 +423,54 @@ $canReadSql = $user && RBAC::can('tools.sql.read');
                     <div id="navigationPanelContent" class="navigation-panel-content">
                         <?php if ($canReadFiles): ?>
                         <div id="libraryPanel" class="library-panel hidden" aria-label="Biblioteca de ficheiros"></div>
+                        <?php endif; ?>
+                        <?php if ($canReadMemories): ?>
+                        <section id="memoriesPanel" class="memory-panel hidden" aria-label="Gestão de memórias">
+                            <p class="memory-description">As memórias são privadas e só são usadas nas conversas da tua conta.</p>
+                            <div class="memory-toolbar">
+                                <input id="memorySearch" type="search" placeholder="Pesquisar memórias" aria-label="Pesquisar memórias">
+                                <select id="memoryTypeFilter" aria-label="Filtrar memórias por tipo">
+                                    <option value="all">Todos os tipos</option>
+                                    <option value="fact">Facto</option>
+                                    <option value="preference">Preferência</option>
+                                    <option value="project">Projecto</option>
+                                    <option value="episode">Episódio</option>
+                                    <option value="note">Nota</option>
+                                </select>
+                            </div>
+                            <?php if ($canWriteMemories): ?>
+                            <form id="memoryCreateForm" class="memory-editor">
+                                <h3>Guardar memória</h3>
+                                <label>
+                                    Conteúdo
+                                    <textarea name="content" maxlength="1000" rows="3" placeholder="O que queres que o SA recorde?" required></textarea>
+                                </label>
+                                <div class="memory-editor-options">
+                                    <label>
+                                        Tipo
+                                        <select name="type">
+                                            <option value="note">Nota</option>
+                                            <option value="fact">Facto</option>
+                                            <option value="preference">Preferência</option>
+                                            <option value="project">Projecto</option>
+                                            <option value="episode">Episódio</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        Importância
+                                        <select name="importance">
+                                            <?php for ($importance = 1; $importance <= 10; $importance++): ?>
+                                            <option value="<?php echo $importance; ?>" <?php echo $importance === 5 ? 'selected' : ''; ?>><?php echo $importance; ?>/10</option>
+                                            <?php endfor; ?>
+                                        </select>
+                                    </label>
+                                    <button class="memory-save" type="submit">Guardar memória</button>
+                                </div>
+                            </form>
+                            <?php endif; ?>
+                            <p id="memoryStatus" class="memory-status" role="status" aria-live="polite"></p>
+                            <div id="memoryList" class="memory-list"></div>
+                        </section>
                         <?php endif; ?>
                         <div id="projectsPanel" class="navigation-panel-view hidden">
                             <div class="navigation-empty-icon" aria-hidden="true">▦</div>

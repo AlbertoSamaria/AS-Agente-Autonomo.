@@ -13,8 +13,7 @@ final class LlamaCpp
             'model' => $model,
             'messages' => $messages,
             'stream' => false,
-            'temperature' => 0.35,
-        ], JSON_UNESCAPED_UNICODE);
+        ] + $this->generationOptions(), JSON_UNESCAPED_UNICODE);
 
         if ($payload === false) {
             throw new RuntimeException('Não foi possível preparar o pedido para o llama.cpp.');
@@ -52,8 +51,7 @@ final class LlamaCpp
             'model' => $model,
             'messages' => $messages,
             'stream' => true,
-            'temperature' => 0.35,
-        ], JSON_UNESCAPED_UNICODE);
+        ] + $this->generationOptions(), JSON_UNESCAPED_UNICODE);
         if ($payload === false) {
             throw new RuntimeException('Não foi possível preparar o streaming para llama.cpp.');
         }
@@ -133,6 +131,23 @@ final class LlamaCpp
         }
 
         return ['message' => ['content' => $content]];
+    }
+
+    /**
+     * Parâmetros explícitos para reduzir loops e repetições.
+     * São enviados em cada pedido porque os valores definidos ao arrancar
+     * o servidor podem ser substituídos pelos parâmetros da API.
+     */
+    private function generationOptions(): array
+    {
+        return [
+            'temperature' => (float) env('LLAMACPP_TEMPERATURE', 0.65),
+            'top_p' => (float) env('LLAMACPP_TOP_P', 0.90),
+            'repeat_penalty' => (float) env('LLAMACPP_REPEAT_PENALTY', 1.18),
+            'frequency_penalty' => (float) env('LLAMACPP_FREQUENCY_PENALTY', 0.15),
+            'presence_penalty' => (float) env('LLAMACPP_PRESENCE_PENALTY', 0.05),
+            'max_tokens' => (int) env('LLAMACPP_MAX_TOKENS', 512),
+        ];
     }
 
     public function health(): array

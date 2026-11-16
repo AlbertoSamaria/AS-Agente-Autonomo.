@@ -23,9 +23,7 @@ final class Ollama
                 'model' => $model,
                 'messages' => $messages,
                 'stream' => false,
-                'options' => [
-                    'temperature' => 0.35,
-                ],
+                'options' => $this->generationOptions(),
             ],
             JSON_UNESCAPED_UNICODE
         );
@@ -109,7 +107,7 @@ final class Ollama
             'model' => $model,
             'messages' => $messages,
             'stream' => true,
-            'options' => ['temperature' => 0.35],
+            'options' => $this->generationOptions(),
         ], JSON_UNESCAPED_UNICODE);
         if ($payload === false) {
             throw new RuntimeException('Não foi possível preparar o streaming para o Ollama.');
@@ -176,6 +174,17 @@ final class Ollama
         }
 
         return ['message' => ['content' => $content]];
+    }
+
+    private function generationOptions(): array
+    {
+        return [
+            'temperature' => (float) env('OLLAMA_TEMPERATURE', 0.65),
+            'top_p' => (float) env('OLLAMA_TOP_P', 0.9),
+            'repeat_penalty' => (float) env('OLLAMA_REPEAT_PENALTY', 1.18),
+            'repeat_last_n' => (int) env('OLLAMA_REPEAT_LAST_N', 128),
+            'num_predict' => (int) env('OLLAMA_NUM_PREDICT', 512),
+        ];
     }
 
 

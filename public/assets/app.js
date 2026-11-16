@@ -1,3 +1,32 @@
+(function initTheme(){
+  let savedTheme='dark';
+  try{
+    const stored=localStorage.getItem('sa-theme');
+    if(stored==='light'||stored==='dark')savedTheme=stored;
+  }catch(error){}
+  document.body.dataset.theme=savedTheme;
+  const updateThemeButton=()=>{
+    const light=document.body.dataset.theme==='light';
+    document.querySelectorAll('.theme-toggle').forEach(button=>{
+      button.textContent=light?'🌙':'☀️';
+      button.setAttribute('aria-label',light?'Mudar para tema escuro':'Mudar para tema claro');
+      button.title=light?'Mudar para tema escuro':'Mudar para tema claro';
+    });
+  };
+  document.addEventListener('DOMContentLoaded',()=>{
+    updateThemeButton();
+    document.querySelectorAll('.theme-toggle').forEach(button=>{
+      button.addEventListener('click',()=>{
+        const next=document.body.dataset.theme==='light'?'dark':'light';
+        document.body.dataset.theme=next;
+        try{localStorage.setItem('sa-theme',next);}catch(error){}
+        updateThemeButton();
+      });
+    });
+  });
+  if(document.readyState!=='loading')updateThemeButton();
+})();
+
 const app=document.getElementById('app'), login=document.getElementById('login');
 const chat=document.getElementById('chat'), input=document.getElementById('message'), form=document.getElementById('composer');
 let conversationId=0;
@@ -328,12 +357,204 @@ const fileInput=document.getElementById('fileInput');
 const actionMenu=document.getElementById('actionMenu');
 const actionMenuBtn=document.getElementById('actionMenuBtn');
 const libraryPanel=document.getElementById('libraryPanel');
+const memoriesPanel=document.getElementById('memoriesPanel');
+const memoryList=document.getElementById('memoryList');
+const memoryStatus=document.getElementById('memoryStatus');
+const memorySearch=document.getElementById('memorySearch');
+const memoryTypeFilter=document.getElementById('memoryTypeFilter');
+const memoryCreateForm=document.getElementById('memoryCreateForm');
 const navigationPanel=document.getElementById('navigationPanel');
 const navigationPanelTitle=document.getElementById('navigationPanelTitle');
 const projectsPanel=document.getElementById('projectsPanel');
 const pluginsPanel=document.getElementById('pluginsPanel');
 const menuBtn=document.getElementById('menuBtn');
 const sidebar=document.querySelector('.sidebar');
+const memoryTypes={fact:'Facto',preference:'Preferência',project:'Projecto',episode:'Episódio',note:'Nota'};
+let memories=[];
+
+function setMemoryStatus(message,isError=false){
+ if(!memoryStatus)return;
+ memoryStatus.textContent=message;
+ memoryStatus.classList.toggle('error',isError);
+}
+async function requestMemory(payload){
+ const options=payload?{
+   method:'POST',
+   headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),
+   body:JSON.stringify(payload)
+ }:{};
+ const response=await fetch('api/memories.php',options);
+ const data=await response.json();
+ if(!response.ok||!data.success)throw new Error(data.error||'Não foi possível gerir as memórias.');
+ return data;
+}
+function makeMemoryTypeSelect(value){
+ const select=document.createElement('select');
+ select.name='type';
+ for(const [type,label] of Object.entries(memoryTypes)){
+   const option=document.createElement('option');
+   option.value=type;option.textContent=label;option.selected=type===value;
+   select.appendChild(option);
+ }
+ return select;
+}
+function makeMemoryImportanceSelect(value){
+ const select=document.createElement('select');
+ select.name='importance';
+ for(let importance=1;importance<=10;importance++){
+   const option=document.createElement('option');
+   option.value=String(importance);option.textContent=`${importance}/10`;
+   option.selected=importance===Number(value);
+   select.appendChild(option);
+ }
+ return select;
+}
+async function loadMemories(){
+ if(!memoryList)return;
+ memoryList.textContent='A carregar memórias…';
+ setMemoryStatus('');
+ try{
+   const data=await requestMemory();
+   memories=Array.isArray(data.memories)?data.memories:[];
+   renderMemories();
+ }catch(error){
+   memoryList.replaceChildren();
+   setMemoryStatus(`Erro ao carregar memórias: ${error.message}`,true);
+ }
+}
+function renderMemories(){
+ if(!memoryList)return;
+ const query=(memorySearch?.value||'').trim().toLocaleLowerCase('pt-PT');
+ const typeFilter=memoryTypeFilter?.value||'all';
+ const filtered=memories.filter(memory=>
+   (typeFilter==='all'||memory.type===typeFilter)
+   &&(!query||`${memory.content} ${memoryTypes[memory.type]||memory.type}`.toLocaleLowerCase('pt-PT').includes(query))
+ );
+ memoryList.replaceChildren();
+ if(!filtered.length){
+   const empty=document.createElement('p');
+   empty.className='memory-empty';
+   empty.textContent=memories.length?'Não foram encontradas memórias com estes filtros.':'Ainda não guardaste memórias.';
+   memoryList.appendChild(empty);
+   return;
+ }
+ for(const memory of filtered){
+   const card=document.createElement('article');
+   card.className='memory-card';
+   const heading=document.createElement('div');
+   heading.className='memory-card-heading';
+   const type=document.createElement('span');
+   type.className='memory-type';
+   type.textContent=memoryTypes[memory.type]||memory.type;
+   const importance=document.createElement('span');
+   importance.className='memory-importance';
+   importance.textContent=`Importância ${memory.importance}/10`;
+   heading.append(type,importance);
+   const content=document.createElement('p');
+   content.className='memory-content';
+   content.textContent=memory.content;
+   const meta=document.createElement('small');
+   meta.className='memory-meta';
+   meta.textContent=`Actualizada em ${memory.updated_at}`;
+   card.append(heading,content,meta);
+
+   if(memoryCreateForm){
+     const actions=document.createElement('div');
+     actions.className='memory-actions';
+     const edit=document.createElement('button');
+     edit.type='button';edit.className='memory-action';
+     edit.textContent='Editar';
+     const remove=document.createElement('button');
+     remove.type='button';remove.className='memory-action danger';
+     remove.textContent='Apagar';
+     edit.addEventListener('click',()=>showMemoryEditor(card,memory));
+     remove.addEventListener('click',()=>deleteMemory(memory.id,remove));
+     actions.append(edit,remove);
+     card.appendChild(actions);
+   }
+   memoryList.appendChild(card);
+ }
+}
+function showMemoryEditor(card,memory){
+ const editor=document.createElement('form');
+ editor.className='memory-editor memory-edit-form';
+ const contentLabel=document.createElement('label');
+ contentLabel.textContent='Conteúdo';
+ const content=document.createElement('textarea');
+ content.name='content';content.maxLength=1000;content.rows=4;
+ content.required=true;content.value=memory.content;
+ contentLabel.appendChild(content);
+ const options=document.createElement('div');
+ options.className='memory-editor-options';
+ const typeLabel=document.createElement('label');
+ typeLabel.textContent='Tipo';
+ typeLabel.appendChild(makeMemoryTypeSelect(memory.type));
+ const importanceLabel=document.createElement('label');
+ importanceLabel.textContent='Importância';
+ importanceLabel.appendChild(makeMemoryImportanceSelect(memory.importance));
+ const save=document.createElement('button');
+ save.type='submit';save.className='memory-save';save.textContent='Guardar alterações';
+ const cancel=document.createElement('button');
+ cancel.type='button';cancel.className='memory-action';cancel.textContent='Cancelar';
+ cancel.addEventListener('click',renderMemories);
+ options.append(typeLabel,importanceLabel,save,cancel);
+ editor.append(contentLabel,options);
+ editor.addEventListener('submit',async event=>{
+   event.preventDefault();
+   save.disabled=true;
+   try{
+     const formData=new FormData(editor);
+     await requestMemory({
+       action:'update',id:Number(memory.id),
+       type:String(formData.get('type')),
+       content:String(formData.get('content')||''),
+       importance:Number(formData.get('importance'))
+     });
+     setMemoryStatus('Memória actualizada.');
+     await loadMemories();
+   }catch(error){
+     setMemoryStatus(`Erro ao actualizar memória: ${error.message}`,true);
+     save.disabled=false;
+   }
+ });
+ card.replaceChildren(editor);
+ content.focus();
+}
+async function deleteMemory(id,button){
+ if(!confirm('Queres apagar esta memória? Esta acção não pode ser desfeita.'))return;
+ button.disabled=true;
+ try{
+   await requestMemory({action:'delete',id:Number(id)});
+   setMemoryStatus('Memória apagada.');
+   await loadMemories();
+ }catch(error){
+   setMemoryStatus(`Erro ao apagar memória: ${error.message}`,true);
+   button.disabled=false;
+ }
+}
+memoryCreateForm?.addEventListener('submit',async event=>{
+ event.preventDefault();
+ const submit=memoryCreateForm.querySelector('[type="submit"]');
+ submit.disabled=true;
+ try{
+   const formData=new FormData(memoryCreateForm);
+   await requestMemory({
+     action:'create',
+     type:String(formData.get('type')),
+     content:String(formData.get('content')||''),
+     importance:Number(formData.get('importance'))
+   });
+   memoryCreateForm.reset();
+   setMemoryStatus('Memória guardada.');
+   await loadMemories();
+ }catch(error){
+   setMemoryStatus(`Erro ao guardar memória: ${error.message}`,true);
+ }finally{
+   submit.disabled=false;
+ }
+});
+memorySearch?.addEventListener('input',renderMemories);
+memoryTypeFilter?.addEventListener('change',renderMemories);
 
 function closeNavigationPanel(){
  navigationPanel?.classList.add('hidden');
@@ -341,12 +562,18 @@ function closeNavigationPanel(){
 function openNavigationPanel(section){
  if(!navigationPanel||!navigationPanelTitle)return;
  libraryPanel?.classList.add('hidden');
+ memoriesPanel?.classList.add('hidden');
  projectsPanel?.classList.add('hidden');
  pluginsPanel?.classList.add('hidden');
  if(section==='library'){
    navigationPanelTitle.textContent='Biblioteca';
    navigationPanel.classList.remove('hidden');
    showLibrary();
+ }else if(section==='memories'){
+   navigationPanelTitle.textContent='Memórias';
+   memoriesPanel?.classList.remove('hidden');
+   navigationPanel.classList.remove('hidden');
+   loadMemories();
  }else if(section==='projects'){
    navigationPanelTitle.textContent='Projectos';
    projectsPanel?.classList.remove('hidden');
@@ -367,6 +594,7 @@ function openNavigationPanel(section){
  });
 }
 document.getElementById('navLibrary')?.addEventListener('click',()=>openNavigationPanel('library'));
+document.getElementById('navMemories')?.addEventListener('click',()=>openNavigationPanel('memories'));
 document.getElementById('navProjects')?.addEventListener('click',()=>openNavigationPanel('projects'));
 document.getElementById('navPlugins')?.addEventListener('click',()=>openNavigationPanel('plugins'));
 document.getElementById('closeNavigationPanel')?.addEventListener('click',closeNavigationPanel);
