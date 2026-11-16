@@ -1,6 +1,6 @@
-# SA — Agente Autónomo 1.2.0
+# SA — Agente Autónomo 1.3.2
 
-Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, model router/fallback e streaming.
+Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, ModelRouter/fallback, streaming e Project Analyzer read-only.
 
 ## Requisitos
 - PHP 8.2+
@@ -69,6 +69,12 @@ O planner valida títulos, prioridades e dependências, rejeita ciclos e grava t
 ## Streaming
 O chat envia tokens ao navegador à medida que o modelo os produz, através de SSE. O ModelRouter regista fornecedor, modelo, finalidade, fallback e latência no log PHP. O endpoint requer autenticação, CSRF, validação de propriedade da conversa/documentos e limite de frequência.
 
+## Análise de projectos
+
+A ferramenta `code.project.analyze` analisa projectos existentes dentro do workspace privado do utilizador. Identifica extensões, tecnologias por manifests, estrutura e indicadores heurísticos de risco, sem modificar ou executar ficheiros. Limites: até 300 ficheiros e 5 MB de conteúdo analisado; ignora dependências vendorizadas, pastas de build e links simbólicos. A análise não substitui SAST profissional nem auditoria manual.
+
+Para pedir a análise ao agente: `Analisa o projecto meu-projecto no workspace`. A ferramenta requer a permissão `tools.files`.
+
 ## Workspace de programação
 O agente dispõe de ferramentas para criar projectos multi-ficheiro, listar e ler ficheiros, escrever alterações e validar sintaxe PHP. Os ficheiros são guardados em `storage/workspaces/<id-do-utilizador>/`, separados por conta e fora da raiz pública através de regras Apache.
 
@@ -114,3 +120,17 @@ Para testar sem substituir imediatamente a instalação actual:
 Os ficheiros gerados ficam em `SA-1.2.0\storage\workspaces\<id-do-utilizador>\`. O workspace é privado por regras Apache e não altera os ficheiros da instalação do SA.
 
 **Importante:** não copies a pasta `uploads` antiga por cima da nova sem necessidade; os documentos continuam na base de dados e os ficheiros originais devem ser preservados na instalação antiga. Para esta primeira validação, usa a pasta paralela e mantém a versão actual intacta.
+
+## Plano de evolução e estado real
+
+Consulta `ROADMAP-IMPLEMENTACAO.md` para a matriz dos 17 capítulos, funcionalidades já existentes, novas funcionalidades desta versão, limitações e sequência de implementação. Itens parciais ou não concluídos não devem ser considerados prontos para produção.
+
+## Versionamento e restauro do workspace
+
+O agente pode criar cópias de segurança privadas por utilizador e restaurar uma versão anterior. As ferramentas disponíveis são `code.workspace.snapshot` (criar), `code.workspace.snapshots` (listar), `code.workspace.diff` (comparar) e `code.workspace.restore` (restaurar). O diff identifica ficheiros adicionados, alterados e removidos e apresenta diferenças linha a linha quando o tamanho permite. O restauro é uma operação sensível sujeita a aprovação e cria automaticamente uma cópia do estado actual antes de substituir a pasta.
+
+As cópias excluem ficheiros ocultos, `.env`, `.git`, dependências, uploads, storage e links simbólicos. Existem limites de 300 ficheiros e 10 MB por operação. Este mecanismo não substitui Git nem backups externos.
+
+## Execução de operações aprovadas
+
+A decisão de aprovação agora executa a ferramenta sensível autorizada (incluindo leitura SQL e restauro de versões), valida novamente o utilizador solicitante e as suas permissões, regista o resultado na execução do agente e impede o processamento duplicado do mesmo pedido.

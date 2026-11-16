@@ -726,6 +726,41 @@ voiceBtn?.addEventListener('click',()=>{
    document.getElementById('uploadStatus').textContent='Não foi possível iniciar o ditado: '+error.message;
  }
 });
+function normalizeNumberedLists(text){
+ const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+ let inCode=false;
+ let number=0;
+ let output=[];
+ for(let i=0;i<lines.length;i++){
+   const line=lines[i];
+   const trimmed=line.trim();
+   if(/^\s*```/.test(trimmed)){
+     inCode=!inCode;
+     output.push(line);
+     continue;
+   }
+   if(inCode||trimmed===''){
+     output.push(line);
+     continue;
+   }
+   const match=line.match(/^([ \t]*)(\d+)[.)]([ \t]+)(.*)$/u);
+   if(match){
+     const sourceNumber=Number(match[2]);
+     if(sourceNumber===1 && number>1) number=0;
+     number++;
+     output.push(match[1]+number+'.'+match[3]+match[4]);
+     continue;
+   }
+   if(/^[ \t]*[-*•][ \t]+/u.test(line)){
+     output.push(line);
+     continue;
+   }
+   number=0;
+   output.push(line);
+ }
+ return output.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
 async function sendMessage(text){
  if(!text.trim())return;
  const message=webSearchEnabled?'Pesquisa na web: '+text.trim():text.trim();
@@ -770,6 +805,10 @@ async function sendMessage(text){
      if(done)break;
    }
    if(buffer.trim())handleEvent(buffer);
+   if(streamedContent){
+     streamedContent=normalizeNumberedLists(streamedContent);
+     bubble.textContent=streamedContent;
+   }
    if(!streamedContent&&!streamError)bubble.textContent='Sem resposta.';
    if(streamError)bubble.textContent=(streamedContent?streamedContent+'\n\n':'')+'Erro: '+streamError;
    if(completed)await loadConversationList();

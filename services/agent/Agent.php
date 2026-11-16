@@ -130,14 +130,20 @@ FERRAMENTAS DISPONÍVEIS:
 - code.file.read: ler um ficheiro do workspace. Argumentos: {"path":"projecto/index.php"}.
 - code.file.write: criar ou actualizar um ficheiro no workspace. Argumentos: {"path":"projecto/index.php","content":"código completo"}.
 - code.php.lint: validar a sintaxe PHP sem executar o ficheiro. Argumentos: {"path":"projecto/index.php"}.
+- code.project.analyze: analisar estrutura, tecnologias e sinais de risco de forma read-only. Argumentos: {"path":"nome-projecto"}.
+- code.workspace.diff: comparar uma pasta actual com uma versão guardada e mostrar ficheiros adicionados, alterados e removidos. Argumentos: {"snapshot_id":"ID"}.
+- code.workspace.snapshot: criar uma cópia de segurança versionada. Argumentos: {"path":"nome-projecto"}; path vazio representa todo o workspace.
+- code.workspace.snapshots: listar cópias de segurança disponíveis. Argumentos: {}.
+- code.workspace.restore: restaurar uma versão existente. Argumentos: {"snapshot_id":"ID"}; esta operação exige aprovação e guarda primeiro o estado actual.
 
 REGRAS DE PROGRAMAÇÃO:
 1. Quando o utilizador pedir explicitamente para criar uma aplicação, site ou projecto, usa code.project.create e inclui os ficheiros necessários no pedido.
 2. Para alterar um projecto existente no workspace, lê primeiro os ficheiros relevantes com code.file.read ou code.workspace.list.
-3. Nunca afirmes que executaste código. code.php.lint apenas valida sintaxe PHP.
+3. Nunca afirmes que executaste código. code.php.lint apenas valida sintaxe PHP; code.project.analyze é uma análise estática heurística read-only.
 4. Os ficheiros são guardados no workspace privado do utilizador, não directamente na instalação do SA.
 5. Não cries ficheiros .env, .htaccess, credenciais ou ficheiros secretos.
 6. Se o pedido for demasiado grande para uma única geração, explica a limitação e propõe dividir a implementação em etapas.
+7. Antes de alterações grandes, cria uma cópia com code.workspace.snapshot. Nunca restaures uma versão sem pedido explícito; code.workspace.restore exige aprovação e guarda automaticamente o estado actual.
 
 IMPORTANTE:
 Uma pergunta sobre Angola, cultura, tecnologia, programação ou conhecimentos gerais não significa automaticamente que devas pesquisar na Internet.
@@ -389,6 +395,11 @@ Produz uma resposta normal, clara e útil.';
                     'code.file.read',
                     'code.workspace.list',
                     'code.php.lint',
+                    'code.project.analyze',
+                    'code.workspace.snapshot',
+                    'code.workspace.diff',
+                    'code.workspace.snapshots',
+                    'code.workspace.restore',
                 ], true)
             ) {
                 $content = $this->selfCheck(
@@ -571,6 +582,16 @@ Produz uma resposta normal, clara e útil.';
                 $input
             ),
 
+            'code.project.analyze' => (bool) preg_match(
+                '/\b(analisa|analisar|inspecciona|inspecionar|audita|auditar)\b.*\b(projecto|projeto|workspace|c[oó]digo)\b/iu',
+                $input
+            ),
+
+            'code.workspace.snapshot' => (bool) preg_match('/\b(cria|criar|faz|fazer|guarda|guardar)\b.*\b(backup|c[oó]pia de seguran[cç]a|vers[aã]o)\b/iu', $input),
+            'code.workspace.diff' => (bool) preg_match('/\b(compara|comparar|diff|diferen[cç]as)\b.*\b(vers[aã]o|backup|c[oó]pia|workspace|projecto|projeto)\b/iu', $input),
+            'code.workspace.snapshots' => (bool) preg_match('/\b(lista|listar|mostra|mostrar|consulta|consultar)\b.*\b(backups|c[oó]pias de seguran[cç]a|vers[oõ]es)\b/iu', $input),
+            'code.workspace.restore' => (bool) preg_match('/\b(restaura|restaurar|reverte|reverter)\b.*\b(backup|c[oó]pia de seguran[cç]a|vers[aã]o)\b/iu', $input),
+
             default => false,
         };
     }
@@ -710,75 +731,173 @@ Produz uma resposta normal, clara e útil.';
             }
 
             if ($trimmed === '') {
+                // Uma linha vazia não termina uma lista numerada.
+                // O contador só será reiniciado quando aparecer conteúdo
+                // não numerado que marque uma nova secção.
                 if ($clean !== [] && trim((string) end($clean)) !== '') {
                     $clean[] = '';
                 }
                 continue;
             }
 
-            $comparable = preg_replace('/^[ \t]*(?:\d+[.)]|[-*•])[ \t]*/u', '', $trimmed) ?? $trimmed;
-            $comparable = trim($comparable, " \t\n\r\0\x0B\"'“”‘’");
-            $comparable = function_exists('mb_strtolower') ? mb_strtolower($comparable) : strtolower($comparable);
-            $comparable = preg_replace('/[[:punct:]]+/u', '', $comparable) ?? $comparable;
-            $comparable = preg_replace('/\s+/u', ' ', $comparable) ?? $comparable;
+            $comparable = preg_replace(
+                '/^[ \t]*(?:\d+[.)]|[-*•])[ \t]*/u',
+                '',
+                $trimmed
+            ) ?? $trimmed;
+            $comparable = trim(
+                $comparable,
+                " \t\n\r\0\x0B\"'“”‘’"
+            );
+            $comparable = function_exists('mb_strtolower')
+                ? mb_strtolower($comparable)
+                : strtolower($comparable);
+            $comparable = preg_replace(
+                '/[[:punct:]]+/u',
+                '',
+                $comparable
+            ) ?? $comparable;
+            $comparable = preg_replace(
+                '/\s+/u',
+                ' ',
+                $comparable
+            ) ?? $comparable;
 
             if ($comparable !== '' && isset($seen[$comparable])) {
                 continue;
             }
+
             if ($comparable !== '') {
                 $seen[$comparable] = true;
             }
 
             // Remove frases inteiras repetidas dentro da mesma linha.
-            $parts = preg_split('/(?<=[.!?])\s+/u', $trimmed) ?: [$trimmed];
+            $parts = preg_split(
+                '/(?<=[.!?])\s+/u',
+                $trimmed
+            ) ?: [$trimmed];
+
             if (count($parts) > 1) {
                 $sentenceSeen = [];
                 $uniqueParts = [];
+
                 foreach ($parts as $part) {
-                    $sentenceKey = trim($part, " \t\n\r\0\x0B\"'“”‘’");
-                    $sentenceKey = function_exists('mb_strtolower') ? mb_strtolower($sentenceKey) : strtolower($sentenceKey);
-                    $sentenceKey = preg_replace('/[[:punct:]]+/u', '', $sentenceKey) ?? $sentenceKey;
-                    $sentenceKey = preg_replace('/\s+/u', ' ', $sentenceKey) ?? $sentenceKey;
-                    if ($sentenceKey !== '' && isset($sentenceSeen[$sentenceKey])) {
+                    $sentenceKey = trim(
+                        $part,
+                        " \t\n\r\0\x0B\"'“”‘’"
+                    );
+                    $sentenceKey = function_exists('mb_strtolower')
+                        ? mb_strtolower($sentenceKey)
+                        : strtolower($sentenceKey);
+                    $sentenceKey = preg_replace(
+                        '/[[:punct:]]+/u',
+                        '',
+                        $sentenceKey
+                    ) ?? $sentenceKey;
+                    $sentenceKey = preg_replace(
+                        '/\s+/u',
+                        ' ',
+                        $sentenceKey
+                    ) ?? $sentenceKey;
+
+                    if (
+                        $sentenceKey !== ''
+                        && isset($sentenceSeen[$sentenceKey])
+                    ) {
                         continue;
                     }
+
                     if ($sentenceKey !== '') {
                         $sentenceSeen[$sentenceKey] = true;
                     }
+
                     $uniqueParts[] = trim($part);
                 }
+
                 $trimmed = implode(' ', $uniqueParts);
             }
 
             $clean[] = $trimmed;
         }
 
-        // Renumera listas fora de blocos de código, depois de remover itens repetidos.
+        /*
+         * Renumera listas numeradas sem reiniciar por causa de linhas vazias.
+         *
+         * Regra:
+         * - 1., 2., 3. continuam sequenciais.
+         * - Se o modelo repetir "1." em itens consecutivos, convertemos
+         *   para 1., 2., 3...
+         * - Se uma nova lista começar em 1. depois de uma lista que já
+         *   tinha mais de um item, iniciamos uma nova lista.
+         * - Texto normal entre listas reinicia o contador.
+         * - Blocos de código continuam intocados.
+         */
         $number = 0;
         $insideCodeFence = false;
+
         foreach ($clean as $index => $line) {
-            if (preg_match('/^\s*```/', trim($line)) === 1) {
+            $trimmed = trim($line);
+
+            if (preg_match('/^\s*```/', $trimmed) === 1) {
                 $insideCodeFence = !$insideCodeFence;
                 continue;
             }
-            if ($insideCodeFence) {
+
+            if ($insideCodeFence || $trimmed === '') {
                 continue;
             }
-            if (trim($line) === '') {
-                $number = 0;
-                continue;
-            }
-            if (preg_match('/^([ \t]*)\d+[.)]([ \t]+)/u', $line, $match) === 1) {
+
+            if (
+                preg_match(
+                    '/^([ \t]*)(\d+)[.)]([ \t]+)(.*)$/u',
+                    $line,
+                    $match
+                ) === 1
+            ) {
+                $sourceNumber = (int) $match[2];
+
+                /*
+                 * Um novo "1." depois de uma lista com vários itens
+                 * normalmente significa uma nova lista. Já quando o
+                 * modelo coloca "1." repetidamente, continuamos a lista.
+                 */
+                if ($sourceNumber === 1 && $number > 1) {
+                    $number = 0;
+                }
+
                 $number++;
-                $clean[$index] = $match[1] . $number . '.' . $match[2] .
-                    preg_replace('/^([ \t]*)\d+[.)]([ \t]+)/u', '', $line, 1);
-            } elseif (preg_match('/^[ \t]*[-*•][ \t]+/u', $line) !== 1) {
-                $number = 0;
+
+                $clean[$index] =
+                    $match[1]
+                    . $number
+                    . '.'
+                    . $match[3]
+                    . $match[4];
+
+                continue;
             }
+
+            // Marcadores não numerados não interferem no contador.
+            if (
+                preg_match(
+                    '/^[ \t]*[-*•][ \t]+/u',
+                    $line
+                ) === 1
+            ) {
+                continue;
+            }
+
+            // Conteúdo normal termina a lista.
+            $number = 0;
         }
 
         $result = implode("\n", $clean);
-        $result = preg_replace("/\n{3,}/u", "\n\n", $result) ?? $result;
+        $result = preg_replace(
+            "/\n{3,}/u",
+            "\n\n",
+            $result
+        ) ?? $result;
+
         return trim($result);
     }
 

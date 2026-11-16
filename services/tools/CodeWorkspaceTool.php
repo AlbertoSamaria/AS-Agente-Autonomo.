@@ -254,6 +254,259 @@ final class CodeWorkspaceTool
         ];
     }
 
+    /** Cria uma versão imutável de uma pasta do workspace. */
+    public function snapshot(array $args, int $userId): array
+    {
+        $relative = $this->relativePath((string) ($args['path'] ?? ''), true);
+        $base = $this->workspace($userId);
+        $source = $relative === '' ? $base : $this->resolve($userId, $relative);
+        if (!is_dir($source) || is_link($source)) {
+            return ['success' => false, 'error' => 'A pasta do workspace não existe ou não é válida.'];
+        }
+
+        $snapshotRoot = $this->snapshotRoot($userId);
+        $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(4));
+        $destination = $snapshotRoot . DIRECTORY_SEPARATOR . $id;
+        $payload = $destination . DIRECTORY_SEPARATOR . 'payload';
+        if (!mkdir($payload, 0700, true)) {
+            throw new RuntimeException('Não foi possível criar a cópia de segurança.');
+        }
+
+        $stats = ['files' => 0, 'bytes' => 0];
+        try {
+            $this->copyTree($source, $payload, $stats);
+            $metadata = [
+                'id' => $id,
+                'path' => $relative,
+                'created_at' => gmdate('c'),
+                'files' => $stats['files'],
+                'bytes' => $stats['bytes'],
+            ];
+            file_put_contents($destination . DIRECTORY_SEPARATOR . 'metadata.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+        } catch (Throwable $error) {
+            $this->removeDirectory($destination);
+            throw $error;
+        }
+
+        return ['success' => true, 'snapshot' => $metadata, 'message' => 'Cópia de segurança criada.'];
+    }
+
+    /** Lista apenas versões pertencentes ao utilizador autenticado. */
+    public function listSnapshots(array $args, int $userId): array
+    {
+        $root = $this->snapshotRoot($userId);
+        $items = [];
+        foreach (new DirectoryIterator($root) as $item) {
+            if ($item->isDot() || !$item->isDir() || $item->isLink()) {
+                continue;
+            }
+            $file = $item->getPathname() . DIRECTORY_SEPARATOR . 'metadata.json';
+            if (!is_file($file)) {
+                continue;
+            }
+            $data = json_decode((string) file_get_contents($file), true);
+            if (is_array($data) && preg_match('/^\d{8}-\d{6}-[a-f0-9]{8}$/', (string) ($data['id'] ?? ''))) {
+                $items[] = $data;
+            }
+        }
+        usort($items, static fn(array $a, array $b): int => strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? '')));
+        return ['success' => true, 'snapshots' => array_slice($items, 0, 100)];
+    }
+
+    /** Compara o conteúdo actual de uma pasta com uma versão guardada. */
+    public function diffSnapshot(array $args, int $userId): array
+    {
+        $id = (string) ($args['snapshot_id'] ?? '');
+        if (preg_match('/^\d{8}-\d{6}-[a-f0-9]{8}$/', $id) !== 1) {
+            return ['success' => false, 'error' => 'Identificador de versão inválido.'];
+        }
+        $snapshot = $this->snapshotRoot($userId) . DIRECTORY_SEPARATOR . $id;
+        $metadataFile = $snapshot . DIRECTORY_SEPARATOR . 'metadata.json';
+        $payload = $snapshot . DIRECTORY_SEPARATOR . 'payload';
+        if (!is_file($metadataFile) || !is_dir($payload) || is_link($snapshot)) {
+            return ['success' => false, 'error' => 'A versão indicada não existe.'];
+        }
+        $metadata = json_decode((string) file_get_contents($metadataFile), true);
+        if (!is_array($metadata) || ($metadata['id'] ?? '') !== $id) {
+            return ['success' => false, 'error' => 'Metadados da versão inválidos.'];
+        }
+        $relative = (string) ($metadata['path'] ?? '');
+        $current = $relative === '' ? $this->workspace($userId) : $this->resolve($userId, $relative, true);
+        $oldFiles = $this->collectFiles($payload);
+        $newFiles = is_dir($current) ? $this->collectFiles($current) : [];
+        $paths = array_unique(array_merge(array_keys($oldFiles), array_keys($newFiles)));
+        sort($paths, SORT_STRING);
+        $changes = [];
+        foreach ($paths as $path) {
+            $old = $oldFiles[$path] ?? null;
+            $new = $newFiles[$path] ?? null;
+            if ($old === null) {
+                $changes[] = ['path' => $path, 'status' => 'added', 'new_bytes' => strlen($new)];
+            } elseif ($new === null) {
+                $changes[] = ['path' => $path, 'status' => 'deleted', 'old_bytes' => strlen($old)];
+            } elseif (!hash_equals(hash('sha256', $old), hash('sha256', $new))) {
+                $changes[] = [
+                    'path' => $path,
+                    'status' => 'modified',
+                    'old_bytes' => strlen($old),
+                    'new_bytes' => strlen($new),
+                    'diff' => $this->lineDiff($old, $new),
+                ];
+            }
+            if (count($changes) >= 300) break;
+        }
+        return [
+            'success' => true,
+            'snapshot_id' => $id,
+            'path' => $relative,
+            'summary' => [
+                'added' => count(array_filter($changes, static fn(array $c): bool => $c['status'] === 'added')),
+                'modified' => count(array_filter($changes, static fn(array $c): bool => $c['status'] === 'modified')),
+                'deleted' => count(array_filter($changes, static fn(array $c): bool => $c['status'] === 'deleted')),
+            ],
+            'changes' => $changes,
+        ];
+    }
+
+    private function collectFiles(string $directory): array
+    {
+        $files = [];
+        $bytes = 0;
+        $walk = function (string $base, string $relative = '') use (&$walk, &$files, &$bytes): void {
+            foreach (new DirectoryIterator($base) as $item) {
+                if ($item->isDot()) continue;
+                $name = $item->getFilename();
+                $lower = strtolower($name);
+                if (str_starts_with($name, '.') || in_array($lower, ['.git', 'node_modules', 'vendor', 'uploads', 'storage'], true) || $lower === 'web.config' || str_starts_with($lower, '.env') || $item->isLink()) continue;
+                $rel = $relative === '' ? $name : $relative . '/' . $name;
+                if ($item->isDir()) {
+                    $walk($item->getPathname(), $rel);
+                } elseif ($item->isFile()) {
+                    $size = $item->getSize();
+                    if ($size > 262144 || $bytes + $size > 10485760 || count($files) >= 300) throw new RuntimeException('O diff excede os limites de 300 ficheiros ou 10 MB.');
+                    $content = file_get_contents($item->getPathname());
+                    if ($content === false) throw new RuntimeException('Não foi possível ler um ficheiro para comparação.');
+                    $files[$rel] = $content;
+                    $bytes += $size;
+                }
+            }
+        };
+        $walk($directory);
+        return $files;
+    }
+
+    private function lineDiff(string $old, string $new): array
+    {
+        $a = preg_split('/\r\n|\r|\n/', $old) ?: [];
+        $b = preg_split('/\r\n|\r|\n/', $new) ?: [];
+        if (count($a) > 500 || count($b) > 500 || count($a) * count($b) > 200000) {
+            return ['summary_only' => true, 'message' => 'Ficheiro demasiado grande para diff linha a linha; tamanhos e hash foram comparados.'];
+        }
+        $n = count($a); $m = count($b);
+        $dp = array_fill(0, $n + 1, array_fill(0, $m + 1, 0));
+        for ($i = $n - 1; $i >= 0; $i--) {
+            for ($j = $m - 1; $j >= 0; $j--) {
+                $dp[$i][$j] = $a[$i] === $b[$j] ? 1 + $dp[$i + 1][$j + 1] : max($dp[$i + 1][$j], $dp[$i][$j + 1]);
+            }
+        }
+        $out = [];
+        $i = 0; $j = 0;
+        while ($i < $n || $j < $m) {
+            if ($i < $n && $j < $m && $a[$i] === $b[$j]) {
+                $out[] = ' ' . $a[$i]; $i++; $j++;
+            } elseif ($j < $m && ($i >= $n || $dp[$i][$j + 1] >= $dp[$i + 1][$j])) {
+                $out[] = '+' . $b[$j++];
+            } else {
+                $out[] = '-' . $a[$i++];
+            }
+            if (count($out) >= 400) { $out[] = '… diff truncado …'; break; }
+        }
+        return $out;
+    }
+
+    /** Restaura uma versão após guardar automaticamente o estado actual. */
+    public function restoreSnapshot(array $args, int $userId): array
+    {
+        $id = (string) ($args['snapshot_id'] ?? '');
+        if (preg_match('/^\d{8}-\d{6}-[a-f0-9]{8}$/', $id) !== 1) {
+            return ['success' => false, 'error' => 'Identificador de versão inválido.'];
+        }
+        $root = $this->snapshotRoot($userId);
+        $snapshot = $root . DIRECTORY_SEPARATOR . $id;
+        $metadataFile = $snapshot . DIRECTORY_SEPARATOR . 'metadata.json';
+        $payload = $snapshot . DIRECTORY_SEPARATOR . 'payload';
+        if (!is_file($metadataFile) || !is_dir($payload) || is_link($snapshot)) {
+            return ['success' => false, 'error' => 'A versão indicada não existe.'];
+        }
+        $metadata = json_decode((string) file_get_contents($metadataFile), true);
+        if (!is_array($metadata) || ($metadata['id'] ?? '') !== $id) {
+            return ['success' => false, 'error' => 'Os metadados da versão são inválidos.'];
+        }
+        $relative = (string) ($metadata['path'] ?? '');
+        $target = $relative === '' ? $this->workspace($userId) : $this->resolve($userId, $relative, true);
+        $parent = dirname($target);
+        if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+            throw new RuntimeException('Não foi possível preparar a pasta de destino.');
+        }
+
+        // Salvaguarda automática: nunca substituir sem preservar o estado actual.
+        if (is_dir($target)) {
+            $this->snapshot(['path' => $relative], $userId);
+            $this->removeDirectory($target);
+        } elseif (file_exists($target)) {
+            return ['success' => false, 'error' => 'O destino não é uma pasta; restauro cancelado.'];
+        }
+        if (!mkdir($target, 0700, true)) {
+            throw new RuntimeException('Não foi possível preparar o destino do restauro.');
+        }
+        $stats = ['files' => 0, 'bytes' => 0];
+        try {
+            $this->copyTree($payload, $target, $stats);
+        } catch (Throwable $error) {
+            throw new RuntimeException('O restauro falhou. A cópia de segurança anterior foi preservada. ' . $error->getMessage(), 0, $error);
+        }
+        return ['success' => true, 'restored_snapshot' => $id, 'path' => $relative, 'files_restored' => $stats['files'], 'bytes_restored' => $stats['bytes'], 'message' => 'Versão restaurada. O estado anterior foi guardado automaticamente como outra versão.'];
+    }
+
+    private function snapshotRoot(int $userId): string
+    {
+        $root = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'workspace_snapshots' . DIRECTORY_SEPARATOR . $userId;
+        if (!is_dir($root) && !mkdir($root, 0700, true) && !is_dir($root)) {
+            throw new RuntimeException('Não foi possível preparar o arquivo de versões.');
+        }
+        $deny = dirname($root) . DIRECTORY_SEPARATOR . '.htaccess';
+        if (!is_file($deny)) {
+            file_put_contents($deny, "Require all denied\n", LOCK_EX);
+        }
+        return $root;
+    }
+
+    private function copyTree(string $source, string $destination, array &$stats): void
+    {
+        if ($stats['files'] > 300 || $stats['bytes'] > 10485760) {
+            throw new RuntimeException('A operação excede o limite de 300 ficheiros ou 10 MB.');
+        }
+        foreach (new DirectoryIterator($source) as $item) {
+            if ($item->isDot()) continue;
+            $name = $item->getFilename();
+            $lower = strtolower($name);
+            if (str_starts_with($name, '.') || in_array($lower, ['.git', 'node_modules', 'vendor', 'uploads', 'storage'], true) || $lower === 'web.config' || str_starts_with($lower, '.env')) continue;
+            $from = $item->getPathname();
+            $to = $destination . DIRECTORY_SEPARATOR . $name;
+            if ($item->isLink()) continue;
+            if ($item->isDir()) {
+                if (!mkdir($to, 0700, true)) throw new RuntimeException('Falha ao copiar pasta ' . $name . '.');
+                $this->copyTree($from, $to, $stats);
+            } elseif ($item->isFile()) {
+                $size = $item->getSize();
+                if ($size > 262144 || $stats['bytes'] + $size > 10485760 || $stats['files'] >= 300) throw new RuntimeException('A cópia excede os limites de segurança.');
+                if (!copy($from, $to)) throw new RuntimeException('Falha ao copiar o ficheiro ' . $name . '.');
+                $stats['files']++;
+                $stats['bytes'] += $size;
+            }
+        }
+    }
+
     public function phpLint(array $args, int $userId): array
     {
         $relative = $this->relativePath((string) ($args['path'] ?? ''));

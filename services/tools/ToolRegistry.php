@@ -7,6 +7,7 @@ require_once __DIR__ . '/WebTool.php';
 require_once __DIR__ . '/FileTool.php';
 require_once __DIR__ . '/SqlTool.php';
 require_once __DIR__ . '/CodeWorkspaceTool.php';
+require_once __DIR__ . '/ProjectAnalyzer.php';
 require_once dirname(__DIR__) . '/planner/Planner.php';
 
 final class ToolRegistry
@@ -25,6 +26,11 @@ final class ToolRegistry
         'code.file.read',
         'code.file.write',
         'code.php.lint',
+        'code.project.analyze',
+        'code.workspace.snapshot',
+        'code.workspace.diff',
+        'code.workspace.snapshots',
+        'code.workspace.restore',
     ];
 
     public function isAllowed(string $tool): bool
@@ -54,6 +60,11 @@ final class ToolRegistry
             'code.file.read' => $code->read($args, $userId),
             'code.file.write' => $code->write($args, $userId),
             'code.php.lint' => $code->phpLint($args, $userId),
+            'code.project.analyze' => (new ProjectAnalyzer())->analyze($args, $userId),
+            'code.workspace.snapshot' => $code->snapshot($args, $userId),
+            'code.workspace.diff' => $code->diffSnapshot($args, $userId),
+            'code.workspace.snapshots' => $code->listSnapshots($args, $userId),
+            'code.workspace.restore' => $code->restoreSnapshot($args, $userId),
             default => ['success' => false, 'error' => 'Ferramenta não autorizada.'],
         };
     }
@@ -67,7 +78,8 @@ final class ToolRegistry
             'files.list' => 'tools.files',
             'sql.read' => 'tools.sql.read',
             'code.project.create', 'code.workspace.list', 'code.file.read',
-            'code.file.write', 'code.php.lint' => 'tools.files',
+            'code.file.write', 'code.php.lint', 'code.project.analyze',
+            'code.workspace.snapshot', 'code.workspace.diff', 'code.workspace.snapshots', 'code.workspace.restore' => 'tools.files',
             default => 'chat',
         };
     }
@@ -76,6 +88,6 @@ final class ToolRegistry
     {
         // SQL permanece sujeito a aprovação. Escritas de código ficam confinadas
         // ao workspace privado do utilizador, fora da raiz pública do Apache.
-        return $tool === 'sql.read';
+        return in_array($tool, ['sql.read', 'code.workspace.restore'], true);
     }
 }
