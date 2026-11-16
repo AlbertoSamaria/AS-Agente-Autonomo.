@@ -13,18 +13,25 @@ final class ModelRouter
 
         foreach ($providers as $providerIndex => $provider) {
             foreach ($this->models($provider, $purpose) as $model) {
+                $startedAt = hrtime(true);
                 try {
                     $client = $provider === 'llama.cpp'
                         ? new LlamaCpp()
                         : new Ollama();
                     $response = $client->chat($messages, $model);
-                    if ($providerIndex > 0) {
-                        error_log('[SA ModelRouter] Fallback succeeded: ' . $provider . '/' . $model);
-                    }
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+                    error_log(
+                        '[SA ModelRouter] success provider=' . $provider .
+                        ' model=' . $model .
+                        ' purpose=' . $purpose .
+                        ' fallback=' . ($providerIndex > 0 ? 'yes' : 'no') .
+                        ' elapsed_ms=' . $elapsedMs
+                    );
                     return $response;
                 } catch (Throwable $error) {
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
                     $failures[] = $provider . '/' . $model . ': ' . $error->getMessage();
-                    error_log('[SA ModelRouter] ' . end($failures));
+                    error_log('[SA ModelRouter] failure elapsed_ms=' . $elapsedMs . ' ' . end($failures));
                 }
             }
         }
@@ -46,6 +53,7 @@ final class ModelRouter
         foreach ($providers as $providerIndex => $provider) {
             foreach ($this->models($provider, $purpose) as $model) {
                 $emitted = '';
+                $startedAt = hrtime(true);
                 try {
                     $client = $provider === 'llama.cpp'
                         ? new LlamaCpp()
@@ -58,13 +66,19 @@ final class ModelRouter
                         },
                         $model
                     );
-                    if ($providerIndex > 0) {
-                        error_log('[SA ModelRouter] Streaming fallback succeeded: ' . $provider . '/' . $model);
-                    }
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+                    error_log(
+                        '[SA ModelRouter] stream_success provider=' . $provider .
+                        ' model=' . $model .
+                        ' purpose=' . $purpose .
+                        ' fallback=' . ($providerIndex > 0 ? 'yes' : 'no') .
+                        ' elapsed_ms=' . $elapsedMs
+                    );
                     return $response;
                 } catch (Throwable $error) {
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
                     $failure = $provider . '/' . $model . ': ' . $error->getMessage();
-                    error_log('[SA ModelRouter] ' . $failure);
+                    error_log('[SA ModelRouter] failure elapsed_ms=' . $elapsedMs . ' ' . $failure);
                     if ($emitted !== '') {
                         throw new RuntimeException(
                             'O streaming foi interrompido depois de começar; não é seguro repetir a resposta. ' .

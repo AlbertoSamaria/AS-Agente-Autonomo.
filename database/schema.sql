@@ -204,18 +204,6 @@ CREATE TABLE IF NOT EXISTS notifications (
     CONSTRAINT fk_notifications_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NULL,
-    action VARCHAR(100) NOT NULL,
-    tool_name VARCHAR(100) NULL,
-    input_json JSON NULL,
-    result_json JSON NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_audit_user(user_id),
-    CONSTRAINT fk_audit_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
-);
-
 CREATE TABLE IF NOT EXISTS model_registry (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     provider VARCHAR(40) NOT NULL DEFAULT 'ollama',

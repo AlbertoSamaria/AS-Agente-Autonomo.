@@ -125,6 +125,19 @@ FERRAMENTAS DISPONÍVEIS:
 - web.search: pesquisar palavras-chave na Internet.
 - files.list: listar ficheiros enviados.
 - sql.read: executar uma consulta SQL de leitura.
+- code.project.create: criar um projecto com vários ficheiros no workspace privado. Argumentos: {"name":"nome-projecto","files":{"index.php":"conteúdo","assets/app.css":"conteúdo"}}.
+- code.workspace.list: listar pastas e ficheiros do workspace. Argumentos: {"path":""}.
+- code.file.read: ler um ficheiro do workspace. Argumentos: {"path":"projecto/index.php"}.
+- code.file.write: criar ou actualizar um ficheiro no workspace. Argumentos: {"path":"projecto/index.php","content":"código completo"}.
+- code.php.lint: validar a sintaxe PHP sem executar o ficheiro. Argumentos: {"path":"projecto/index.php"}.
+
+REGRAS DE PROGRAMAÇÃO:
+1. Quando o utilizador pedir explicitamente para criar uma aplicação, site ou projecto, usa code.project.create e inclui os ficheiros necessários no pedido.
+2. Para alterar um projecto existente no workspace, lê primeiro os ficheiros relevantes com code.file.read ou code.workspace.list.
+3. Nunca afirmes que executaste código. code.php.lint apenas valida sintaxe PHP.
+4. Os ficheiros são guardados no workspace privado do utilizador, não directamente na instalação do SA.
+5. Não cries ficheiros .env, .htaccess, credenciais ou ficheiros secretos.
+6. Se o pedido for demasiado grande para uma única geração, explica a limitação e propõe dividir a implementação em etapas.
 
 IMPORTANTE:
 Uma pergunta sobre Angola, cultura, tecnologia, programação ou conhecimentos gerais não significa automaticamente que devas pesquisar na Internet.
@@ -185,11 +198,12 @@ Memórias relevantes:';
                 (int) env('AGENT_CONTEXT_MAX_CHARS', 24000)
             );
 
+            $purpose = $this->isCodingRequest($input) ? 'code' : 'general';
             $response = $this->generate(
                 $messages,
                 $onToken,
                 $documentContext === [],
-                'general'
+                $purpose
             );
 
             $content = trim(
@@ -367,7 +381,16 @@ Produz uma resposta normal, clara e útil.';
                 }
             }
 
-            if ($verificationContext !== []) {
+            if (
+                $verificationContext !== []
+                && !in_array($toolName ?? '', [
+                    'code.project.create',
+                    'code.file.write',
+                    'code.file.read',
+                    'code.workspace.list',
+                    'code.php.lint',
+                ], true)
+            ) {
                 $content = $this->selfCheck(
                     $input,
                     $content,
@@ -523,6 +546,31 @@ Produz uma resposta normal, clara e útil.';
                 $input
             ),
 
+            'code.project.create' => (bool) preg_match(
+                '/\b(cria|criar|desenvolve|desenvolver|gera|gerar|constr[oó]i|construir|implementa|implementar)\b.*\b(site|p[aá]gina|aplica[cç][aã]o|sistema|projecto|projeto|web)\b/iu',
+                $input
+            ),
+
+            'code.file.write' => (bool) preg_match(
+                '/\b(cria|criar|escreve|escrever|gera|gerar|altera|alterar|actualiza|atualiza|corrige|corrigir)\b.*\b(ficheiro|arquivo|c[oó]digo|p[aá]gina|script)\b/iu',
+                $input
+            ),
+
+            'code.file.read' => (bool) preg_match(
+                '/\b(l[eê]|abre|mostrar|mostra|analisa|analisar|consulta)\b.*\b(ficheiro|arquivo|c[oó]digo)\b/iu',
+                $input
+            ),
+
+            'code.workspace.list' => (bool) preg_match(
+                '/\b(lista|listar|mostra|mostrar|explora|explorar)\b.*\b(workspace|projecto|projeto|ficheiros|arquivos|pasta)\b/iu',
+                $input
+            ),
+
+            'code.php.lint' => (bool) preg_match(
+                '/\b(verifica|verificar|valida|validar|testa|testar|analisa|analisar)\b.*\b(sintaxe|php|ficheiro|arquivo)\b/iu',
+                $input
+            ),
+
             default => false,
         };
     }
@@ -582,6 +630,15 @@ Produz uma resposta normal, clara e útil.';
         return (bool) $stmt->fetchColumn();
     }
 
+
+    private function isCodingRequest(string $input): bool
+    {
+        return (bool) preg_match(
+            '/\\b(programa|programar|c[oó]digo|codifica|desenvolve|desenvolver|cria|criar|constr[oó]i|construir|implementa|implementar|debug|corrige|corrigir|php|javascript|python|html|css|sql|laravel|react|vue|framework|aplica[cç][aã]o|site|p[aá]gina web)\\b/iu',
+            $input
+        );
+    }
+
     private function generate(
         array $messages,
         ?callable $onToken,
@@ -598,15 +655,16 @@ Produz uma resposta normal, clara e útil.';
         }
 
         /*
-         * Guardamos os tokens até ao fim para poder remover repetições
-         * antes de as enviar ao browser. A resposta continua a usar o
-         * endpoint SSE, mas é enviada como um bloco final validado.
+         * Encaminha cada token imediatamente para o endpoint SSE.
+         * A limpeza de repetições é aplicada ao texto final guardado,
+         * sem bloquear a experiência de streaming no navegador.
          */
         $raw = '';
         $response = $router->chatStream(
             $messages,
-            static function (string $token) use (&$raw): void {
+            static function (string $token) use (&$raw, $onToken): void {
                 $raw .= $token;
+                $onToken($token);
             },
             $purpose
         );
@@ -615,12 +673,7 @@ Produz uma resposta normal, clara e útil.';
         if ($content === '') {
             $content = $raw;
         }
-        $content = $this->cleanRepeatedContent($content);
-        $response['message']['content'] = $content;
-
-        if ($content !== '') {
-            $onToken($content);
-        }
+        $response['message']['content'] = $this->cleanRepeatedContent($content);
 
         return $response;
     }
@@ -892,14 +945,18 @@ Produz uma resposta normal, clara e útil.';
     ): void {
         db()->prepare(
             "INSERT INTO audit_logs
-             (user_id, action, tool_name, input_json, result_json)
-             VALUES (?, ?, ?, ?, ?)"
+             (user_id, action, status, ip_address, user_agent, details_json)
+             VALUES (?, ?, ?, ?, ?, ?)"
         )->execute([
             $userId,
-            'tool_execution',
-            $tool,
-            json_encode($input, JSON_UNESCAPED_UNICODE),
-            json_encode($result, JSON_UNESCAPED_UNICODE),
+            'tool_execution:' . $tool,
+            !empty($result['success']) ? 'success' : 'failed',
+            $_SERVER['REMOTE_ADDR'] ?? null,
+            $_SERVER['HTTP_USER_AGENT'] ?? null,
+            json_encode(
+                ['tool' => $tool, 'input' => $input, 'result' => $result],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ) ?: '{}',
         ]);
     }
 }

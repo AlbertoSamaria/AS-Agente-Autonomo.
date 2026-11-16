@@ -1,4 +1,4 @@
-# SA — Agente Autónomo 1.1
+# SA — Agente Autónomo 1.2.0
 
 Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, model router/fallback e streaming.
 
@@ -67,7 +67,22 @@ O planner valida títulos, prioridades e dependências, rejeita ciclos e grava t
 - Ficheiros: permite enviar PDF, DOCX, XLSX, TXT e CSV (até 20 MB por ficheiro).
 
 ## Streaming
-O chat envia respostas SSE usando o ModelRouter e a mesma política de fallback do modo normal. O endpoint requer autenticação, CSRF, validação de propriedade da conversa/documentos e limite de frequência.
+O chat envia tokens ao navegador à medida que o modelo os produz, através de SSE. O ModelRouter regista fornecedor, modelo, finalidade, fallback e latência no log PHP. O endpoint requer autenticação, CSRF, validação de propriedade da conversa/documentos e limite de frequência.
+
+## Workspace de programação
+O agente dispõe de ferramentas para criar projectos multi-ficheiro, listar e ler ficheiros, escrever alterações e validar sintaxe PHP. Os ficheiros são guardados em `storage/workspaces/<id-do-utilizador>/`, separados por conta e fora da raiz pública através de regras Apache.
+
+Ferramentas disponíveis no chat:
+- `code.project.create`: cria um projecto com até 40 ficheiros e 2 MB no total.
+- `code.workspace.list`: lista o conteúdo do workspace.
+- `code.file.read`: lê ficheiros até 256 KB.
+- `code.file.write`: escreve ficheiros até 256 KB.
+- `code.php.lint`: valida a sintaxe PHP com `php -l`, sem executar o ficheiro.
+
+**Limitação de segurança desta versão:** ainda não existe execução arbitrária de PHP, Python ou JavaScript. A validação PHP é apenas sintáctica. A execução real deverá ser adicionada numa sandbox isolada (por exemplo, contentor Docker com limites de CPU, memória, tempo, rede e sistema de ficheiros), nunca através de `eval`, `shell_exec` livre ou execução directa no host.
+
+Os projectos criados pelo agente ficam no workspace privado do utilizador e não substituem nem alteram a instalação do próprio SA.
+
 
 ## Segurança e operação
 Aplica a migração `database/migrations/20261113_add_request_limits.sql` nas instalações existentes (instalações novas recebem a tabela através de `database/schema.sql`). Há limites de frequência para login, chat, planner e uploads. Os eventos de ferramentas e falhas do ModelRouter são enviados ao log de erros PHP; as execuções do agente continuam registadas em `agent_runs`.
@@ -85,3 +100,17 @@ Aplica a migração `database/migrations/20261113_add_request_limits.sql` nas in
 - vector database dedicado quando a base crescer.
 - OCR para PDFs digitalizados.
 - integração de email/push.
+
+
+## Testar esta versão numa instalação existente
+
+Para testar sem substituir imediatamente a instalação actual:
+1. Extrai o ZIP para uma pasta paralela, por exemplo `C:\xampp\htdocs\SA-1.2.0`.
+2. Copia o `.env` da instalação actual para a nova pasta. O `.env` não é distribuído no ZIP por conter credenciais.
+3. Mantém a base de dados `sa_agent` existente. Esta versão não exige reimportar `schema.sql` nem executar uma migração de dados.
+4. Abre `http://localhost/SA-1.2.0/` e inicia sessão com a conta existente.
+5. Testa primeiro o chat e o streaming. Depois pede ao SA para criar um pequeno projecto, por exemplo: `Cria uma página web simples em HTML, CSS e JavaScript chamada teste-web, com um cabeçalho e um botão.`
+
+Os ficheiros gerados ficam em `SA-1.2.0\storage\workspaces\<id-do-utilizador>\`. O workspace é privado por regras Apache e não altera os ficheiros da instalação do SA.
+
+**Importante:** não copies a pasta `uploads` antiga por cima da nova sem necessidade; os documentos continuam na base de dados e os ficheiros originais devem ser preservados na instalação antiga. Para esta primeira validação, usa a pasta paralela e mantém a versão actual intacta.
