@@ -46,22 +46,44 @@ final class DocumentProcessor
                 throw new RuntimeException('Não foi possível dividir o conteúdo do documento em blocos.');
             }
 
+            // Gerar todos os embeddings antes de substituir os blocos existentes.
+            // Se a IA falhar, os chunks anteriores permanecem intactos.
             $embeddingService = new EmbeddingService();
-            $insert = db()->prepare(
-                'INSERT INTO document_chunks (document_id, chunk_index, content, embedding_json) VALUES (?, ?, ?, ?)'
-            );
+            $preparedChunks = [];
 
             foreach ($chunks as $index => $chunk) {
                 $vector = $embeddingService->embed($chunk, 'RETRIEVAL_DOCUMENT');
-                $insert->execute([
-                    $documentId,
+                $preparedChunks[] = [
                     $index,
                     $chunk,
                     json_encode($vector, JSON_THROW_ON_ERROR)
-                ]);
+                ];
             }
 
-            db()->prepare("UPDATE documents SET status = 'ready', error_message = NULL WHERE id = ?")
+            $pdo = db();
+            $pdo->beginTransaction();
+
+            try {
+                $pdo->prepare('DELETE FROM document_chunks WHERE document_id = ?')
+                    ->execute([$documentId]);
+
+                $insert = $pdo->prepare(
+                    'INSERT INTO document_chunks (document_id, chunk_index, content, embedding_json) VALUES (?, ?, ?, ?)'
+                );
+
+                foreach ($preparedChunks as [$index, $chunk, $embeddingJson]) {
+                    $insert->execute([$documentId, $index, $chunk, $embeddingJson]);
+                }
+
+                $pdo->commit();
+            } catch (Throwable $databaseError) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $databaseError;
+            }
+
+            $pdo->prepare("UPDATE documents SET status = 'ready', error_message = NULL WHERE id = ?")
                 ->execute([$documentId]);
 
             return ['success' => true, 'chunks' => count($chunks)];
