@@ -692,23 +692,56 @@ actionMenu?.addEventListener('click',event=>{
 });
 fileInput?.addEventListener('change',async()=>{
  const files=Array.from(fileInput.files||[]);
+ if(!files.length)return;
+ const maxBytes=20*1024*1024;
+ let succeeded=0;
+ let failed=0;
  for(const file of files){
-   setUploadStatus(`A enviar ${file.name}…`);
-   try{
-     const body=new FormData();body.append('file',file);
-     const upload=await fetch('api/upload.php',{method:'POST',headers:csrfHeaders(),body});
-     const document=await upload.json();
-     if(!upload.ok||!document.success)throw new Error(document.error||'Não foi possível enviar o ficheiro.');
-     setUploadStatus(`A processar ${file.name}…`);
-     const process=await fetch('api/process_document.php',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),body:JSON.stringify({document_id:document.document_id})});
-     const result=await process.json();
-     if(!process.ok||!result.success)throw new Error(result.error||'Não foi possível processar o ficheiro.');
-     selectedDocuments.set(String(document.document_id),document.name);
-     renderSelectedDocuments();
-     setUploadStatus(`${file.name} pronto para consulta.`);
-   }catch(error){setUploadStatus(`Erro em ${file.name}: ${error.message}`);}
+  if(file.size<=0){
+   failed++;
+   setUploadStatus(`\u274c ${file.name}: o ficheiro está vazio.`);
+   continue;
+  }
+  if(file.size>maxBytes){
+   failed++;
+   setUploadStatus(`\u274c ${file.name}: excede o limite de 20 MB.`);
+   continue;
+  }
+  setUploadStatus(`A enviar ${file.name}…`);
+  try{
+   const body=new FormData();
+   body.append('file',file,file.name);
+   const upload=await fetch('api/upload.php',{method:'POST',headers:csrfHeaders(),body});
+   let document;
+   try{document=await upload.json();}
+   catch(_){throw new Error(upload.status===413?'O servidor recusou o ficheiro por exceder o limite de envio.':'O servidor devolveu uma resposta inválida. Verifica os limites PHP e o espaço disponível.');}
+   if(!upload.ok||!document.success)throw new Error(document.error||`Falha no envio (HTTP ${upload.status}).`);
+   selectedDocuments.set(String(document.document_id),document.name||file.name);
+   renderSelectedDocuments();
+   setUploadStatus(`Upload concluído. A processar ${file.name}…`);
+   const process=await fetch('api/process_document.php',{
+    method:'POST',
+    headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),
+    body:JSON.stringify({document_id:document.document_id})
+   });
+   let result;
+   try{result=await process.json();}
+   catch(_){throw new Error('O ficheiro foi guardado, mas o servidor não devolveu o resultado do processamento. Consulta a Biblioteca.');}
+   if(!process.ok||!result.success)throw new Error(result.error||`Upload guardado, mas o processamento falhou (HTTP ${process.status}). Consulta a Biblioteca.`);
+   succeeded++;
+   setUploadStatus(`\u2705 ${file.name} está pronto para consulta.`);
+  }catch(error){
+   failed++;
+   setUploadStatus(`\u274c ${file.name}: ${error.message||'Erro inesperado no upload.'}`);
+  }
  }
  fileInput.value='';
+ if(succeeded||failed){
+  const summary=[];
+  if(succeeded)summary.push(`${succeeded} ficheiro(s) processado(s)`);
+  if(failed)summary.push(`${failed} falhou/falharam`);
+  setUploadStatus(summary.join(' · ')+'.');
+ }
 });
 const voiceBtn=document.getElementById('voiceBtn');
 voiceBtn?.addEventListener('click',()=>{
