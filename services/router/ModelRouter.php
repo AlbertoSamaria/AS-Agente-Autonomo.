@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 require_once dirname(__DIR__) . '/ai/Ollama.php';
 require_once dirname(__DIR__) . '/ai/LlamaCpp.php';
 require_once dirname(__DIR__) . '/ai/Gemini.php';
+require_once dirname(__DIR__) . '/ai/Groq.php';
 
 final class ModelRouter
 {
@@ -17,8 +18,7 @@ final class ModelRouter
             foreach ($this->models($provider, $purpose) as $model) {
                 $startedAt = hrtime(true);
                 try {
-                    $client = $this->client($provider);
-                    $response = $client->chat($messages, $model);
+                    $response = $this->client($provider)->chat($messages, $model);
                     $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1000000);
                     error_log('[SA ModelRouter] success provider=' . $provider .
                         ' model=' . $model . ' purpose=' . $purpose .
@@ -48,8 +48,7 @@ final class ModelRouter
                 $emitted = '';
                 $startedAt = hrtime(true);
                 try {
-                    $client = $this->client($provider);
-                    $response = $client->chatStream(
+                    $response = $this->client($provider)->chatStream(
                         $messages,
                         static function (string $token) use (&$emitted, $onToken): void {
                             $emitted .= $token;
@@ -91,13 +90,14 @@ final class ModelRouter
             'ollama' => new Ollama(),
             'llama.cpp' => new LlamaCpp(),
             'gemini' => new Gemini(),
+            'groq' => new Groq(),
             default => throw new RuntimeException('Fornecedor nao suportado: ' . $provider),
         };
     }
 
     private function providers(): array
     {
-        $allowed = ['ollama', 'llama.cpp', 'gemini'];
+        $allowed = ['ollama', 'llama.cpp', 'gemini', 'groq'];
         $primary = strtolower((string) env('LLM_PROVIDER', 'ollama'));
         if (!in_array($primary, $allowed, true)) {
             throw new RuntimeException('Fornecedor de modelos nao suportado: ' . $primary);
@@ -110,8 +110,11 @@ final class ModelRouter
         $defaultFallback = match ($primary) {
             'ollama' => 'llama.cpp',
             'llama.cpp' => 'ollama',
+            'gemini' => 'groq',
+            'groq' => 'gemini',
             default => 'ollama',
         };
+
         $fallback = strtolower((string) env('LLM_FALLBACK_PROVIDER', $defaultFallback));
         if (!in_array($fallback, $allowed, true)) {
             throw new RuntimeException('Fornecedor de fallback nao suportado: ' . $fallback);
@@ -140,6 +143,7 @@ final class ModelRouter
             'ollama' => ['OLLAMA_MODEL', 'qwen2.5:1.5b'],
             'llama.cpp' => ['LLAMACPP_MODEL', 'local-model'],
             'gemini' => ['GEMINI_MODEL', 'gemini-3.8-flash'],
+            'groq' => ['GROQ_MODEL', 'openai/gpt-oss-20b'],
         ];
         [$setting, $default] = $settings[$provider];
         $configured = (string) env($setting, $default);
