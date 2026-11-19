@@ -8,9 +8,11 @@ try{
     $d=json_decode(file_get_contents('php://input'),true)?:[];
     $user=Auth::user();
     $documentId=(int)($d['document_id']??0);
-    $owner=db()->prepare('SELECT user_id FROM documents WHERE id=? LIMIT 1');
+    $owner=db(true)->prepare('SELECT user_id FROM documents WHERE id=? LIMIT 1');
     $owner->execute([$documentId]);
     $documentUserId=$owner->fetchColumn();
+    $owner->closeCursor();
+    unset($owner);
     if($documentUserId===false) json_response(['success'=>false,'error'=>'Documento inexistente.'],404);
     if($user['role']!=='admin'&&(int)$documentUserId!==(int)$user['id']) {
         json_response(['success'=>false,'error'=>'Não tens acesso a este documento.'],403);
