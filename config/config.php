@@ -20,8 +20,15 @@ function env(string $key, mixed $default = null): mixed {
     return $_ENV[$key] ?? getenv($key) ?: $default;
 }
 
-function db(): PDO {
+function db(bool $reconnect = false): PDO {
     static $pdo = null;
+
+    // Em hospedagem partilhada, o MySQL pode fechar ligações inactivas
+    // enquanto a aplicação aguarda respostas de serviços externos de IA.
+    if ($reconnect) {
+        $pdo = null;
+    }
+
     if ($pdo instanceof PDO) return $pdo;
     $dsn = 'mysql:host=' . env('DB_HOST','127.0.0.1') .
            ';port=' . env('DB_PORT','3306') .
