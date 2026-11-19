@@ -130,7 +130,7 @@ Aplica a migração `database/migrations/20261113_add_request_limits.sql` nas in
 4. Abre `http://localhost/SA-1.2.0/` e inicia sessão com a conta existente.
 5. Testa primeiro o chat e o streaming. Depois pede ao SA para criar um pequeno projecto, por exemplo: `Cria uma página web simples em HTML, CSS e JavaScript chamada teste-web, com um cabeçalho e um botão.`
 
-Os ficheiros gerados ficam em `SA-1.2.0\storage\workspaces\<id-do-utilizador>\`. O workspace é privado por regras Apache e não altera os ficheiros da instalação do SA.
+Os ficheiros gerados ficam em `SA-1.2.0/storage/workspaces/<id-do-utilizador>/`. O workspace é privado por regras Apache e não altera os ficheiros da instalação do SA.
 
 **Importante:** não copies a pasta `uploads` antiga por cima da nova sem necessidade; os documentos continuam na base de dados e os ficheiros originais devem ser preservados na instalação antiga. Para esta primeira validação, usa a pasta paralela e mantém a versão actual intacta.
 
