@@ -16,4 +16,7 @@ try{
         json_response(['success'=>false,'error'=>'Não tens acesso a este documento.'],403);
     }
     json_response((new DocumentProcessor())->process($documentId));
-}catch(Throwable $e){json_response(['success'=>false,'error'=>$e->getMessage()],500);}
+}catch(Throwable $e){
+    error_log('SA process_document.php: '.$e->getMessage().' @ '.$e->getFile().':'.$e->getLine());
+    json_response(['success'=>false,'error'=>$e->getMessage()],500);
+}
