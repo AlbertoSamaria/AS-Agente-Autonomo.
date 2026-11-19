@@ -47,9 +47,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
             <button id="themeToggleLogin" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">☀️</button>
             <div class="welcome-logo">SA</div>
 
-            <h1>SA</h1>
-
-            <p>Agente Autónomo</p>
+            <h1>Seu chat</h1>
 
             <input
                 id="email"
@@ -184,7 +182,23 @@ $canWriteMemories = $user && RBAC::can('memory.write');
             <div
                 class="side-footer"
                 id="userInfo"
-            ></div>
+            >
+                <?php if ($user): ?>
+                    <div class="user-session" aria-label="Sessão do utilizador">
+                        <span class="user-name" id="userInfoName" aria-label="Nome de utilizador">
+                            <?php echo htmlspecialchars((string)($user['name'] ?? $user['email'] ?? 'Utilizador'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <button
+                            id="logoutBtn"
+                            class="logout-btn"
+                            type="button"
+                            aria-label="Terminar sessão"
+                        >
+                            Terminar sessão
+                        </button>
+                    </div>
+                <?php endif; ?>
+            </div>
 
         </aside>
 
@@ -222,21 +236,21 @@ $canWriteMemories = $user && RBAC::can('memory.write');
 
                 <!-- Estado da IA -->
 
-                <div class="status">
+                <div class="topbar-actions">
+                    <div class="status">
 
-                    <span id="statusDot"></span>
+                        <span id="statusDot"></span>
 
-                    <span id="statusText">
-                        A verificar IA…
-                    </span>
+                        <span id="statusText">
+                            A verificar IA…
+                        </span>
 
-                </div>
+                    </div>
 
-                <button id="themeToggle" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">
-                    ☀️
-                </button>
+                    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">
+                        ☀️
+                    </button>
 
-                <?php if ($user): ?>
                     <?php if ($isAdmin): ?>
                         <button
                             id="adminPanelBtn"
@@ -247,15 +261,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                             Painel admin
                         </button>
                     <?php endif; ?>
-                    <button
-                        id="logoutBtn"
-                        class="logout-btn"
-                        type="button"
-                        aria-label="Terminar sessão"
-                    >
-                        Terminar sessão
-                    </button>
-                <?php endif; ?>
+                </div>
 
             </header>
 

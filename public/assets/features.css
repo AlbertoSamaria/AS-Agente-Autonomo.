@@ -44,6 +44,10 @@
 .library-item small{color:#9ba8c4;font-size:11px}
 .library-add{padding:10px 13px;border:1px solid #495a7b;border-radius:9px;background:#1a2742;color:#edf4ff;cursor:pointer}
 .bubble{white-space:pre-wrap}
+.user-account-name{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c5cee2}
+.user-account-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.user-account-actions{display:flex;gap:7px;margin-top:8px}
+.user-account .logout-btn,.user-account .admin-btn{padding:7px 9px;font-size:11px}
 .app.sidebar-open:after{position:fixed;inset:0;z-index:45;background:rgba(3,7,16,.62);content:""}
 @media(max-width:720px){
  .sidebar{position:fixed;inset:0 auto 0 0;z-index:50;display:flex;width:min(300px,85vw);transform:translateX(-105%);transition:transform .2s ease;box-shadow:18px 0 45px rgba(0,0,0,.35)}

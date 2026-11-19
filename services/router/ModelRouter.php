@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
+
 require_once dirname(__DIR__, 2) . '/config/config.php';
 require_once dirname(__DIR__) . '/ai/Ollama.php';
 require_once dirname(__DIR__) . '/ai/LlamaCpp.php';
+require_once dirname(__DIR__) . '/ai/Gemini.php';
 
 final class ModelRouter
 {
@@ -15,21 +17,16 @@ final class ModelRouter
             foreach ($this->models($provider, $purpose) as $model) {
                 $startedAt = hrtime(true);
                 try {
-                    $client = $provider === 'llama.cpp'
-                        ? new LlamaCpp()
-                        : new Ollama();
+                    $client = $this->client($provider);
                     $response = $client->chat($messages, $model);
-                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
-                    error_log(
-                        '[SA ModelRouter] success provider=' . $provider .
-                        ' model=' . $model .
-                        ' purpose=' . $purpose .
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1000000);
+                    error_log('[SA ModelRouter] success provider=' . $provider .
+                        ' model=' . $model . ' purpose=' . $purpose .
                         ' fallback=' . ($providerIndex > 0 ? 'yes' : 'no') .
-                        ' elapsed_ms=' . $elapsedMs
-                    );
+                        ' elapsed_ms=' . $elapsedMs);
                     return $response;
                 } catch (Throwable $error) {
-                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1000000);
                     $failures[] = $provider . '/' . $model . ': ' . $error->getMessage();
                     error_log('[SA ModelRouter] failure elapsed_ms=' . $elapsedMs . ' ' . end($failures));
                 }
@@ -37,16 +34,12 @@ final class ModelRouter
         }
 
         throw new RuntimeException(
-            'Todos os fornecedores e modelos configurados falharam: ' .
-            implode(' | ', $failures)
+            'Todos os fornecedores e modelos configurados falharam: ' . implode(' | ', $failures)
         );
     }
 
-    public function chatStream(
-        array $messages,
-        callable $onToken,
-        string $purpose = 'general'
-    ): array {
+    public function chatStream(array $messages, callable $onToken, string $purpose = 'general'): array
+    {
         $providers = $this->providers();
         $failures = [];
 
@@ -55,9 +48,7 @@ final class ModelRouter
                 $emitted = '';
                 $startedAt = hrtime(true);
                 try {
-                    $client = $provider === 'llama.cpp'
-                        ? new LlamaCpp()
-                        : new Ollama();
+                    $client = $this->client($provider);
                     $response = $client->chatStream(
                         $messages,
                         static function (string $token) use (&$emitted, $onToken): void {
@@ -66,22 +57,19 @@ final class ModelRouter
                         },
                         $model
                     );
-                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
-                    error_log(
-                        '[SA ModelRouter] stream_success provider=' . $provider .
-                        ' model=' . $model .
-                        ' purpose=' . $purpose .
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1000000);
+                    error_log('[SA ModelRouter] stream_success provider=' . $provider .
+                        ' model=' . $model . ' purpose=' . $purpose .
                         ' fallback=' . ($providerIndex > 0 ? 'yes' : 'no') .
-                        ' elapsed_ms=' . $elapsedMs
-                    );
+                        ' elapsed_ms=' . $elapsedMs);
                     return $response;
                 } catch (Throwable $error) {
-                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+                    $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1000000);
                     $failure = $provider . '/' . $model . ': ' . $error->getMessage();
-                    error_log('[SA ModelRouter] failure elapsed_ms=' . $elapsedMs . ' ' . $failure);
+                    error_log('[SA ModelRouter] stream_failure elapsed_ms=' . $elapsedMs . ' ' . $failure);
                     if ($emitted !== '') {
                         throw new RuntimeException(
-                            'O streaming foi interrompido depois de começar; não é seguro repetir a resposta. ' .
+                            'O streaming foi interrompido depois de comecar; nao e seguro repetir a resposta. ' .
                             $error->getMessage(),
                             0,
                             $error
@@ -93,28 +81,40 @@ final class ModelRouter
         }
 
         throw new RuntimeException(
-            'Todos os fornecedores e modelos configurados falharam: ' .
-            implode(' | ', $failures)
+            'Todos os fornecedores e modelos configurados falharam: ' . implode(' | ', $failures)
         );
+    }
+
+    private function client(string $provider): object
+    {
+        return match ($provider) {
+            'ollama' => new Ollama(),
+            'llama.cpp' => new LlamaCpp(),
+            'gemini' => new Gemini(),
+            default => throw new RuntimeException('Fornecedor nao suportado: ' . $provider),
+        };
     }
 
     private function providers(): array
     {
+        $allowed = ['ollama', 'llama.cpp', 'gemini'];
         $primary = strtolower((string) env('LLM_PROVIDER', 'ollama'));
-        if (!in_array($primary, ['ollama', 'llama.cpp'], true)) {
-            throw new RuntimeException('Fornecedor de modelos não suportado: ' . $primary);
+        if (!in_array($primary, $allowed, true)) {
+            throw new RuntimeException('Fornecedor de modelos nao suportado: ' . $primary);
         }
 
         if (!filter_var(env('LLM_FALLBACK_ENABLED', 'true'), FILTER_VALIDATE_BOOLEAN)) {
             return [$primary];
         }
 
-        $fallback = strtolower((string) env(
-            'LLM_FALLBACK_PROVIDER',
-            $primary === 'ollama' ? 'llama.cpp' : 'ollama'
-        ));
-        if (!in_array($fallback, ['ollama', 'llama.cpp'], true)) {
-            throw new RuntimeException('Fornecedor de fallback não suportado: ' . $fallback);
+        $defaultFallback = match ($primary) {
+            'ollama' => 'llama.cpp',
+            'llama.cpp' => 'ollama',
+            default => 'ollama',
+        };
+        $fallback = strtolower((string) env('LLM_FALLBACK_PROVIDER', $defaultFallback));
+        if (!in_array($fallback, $allowed, true)) {
+            throw new RuntimeException('Fornecedor de fallback nao suportado: ' . $fallback);
         }
 
         return array_values(array_unique([$primary, $fallback]));
@@ -136,22 +136,20 @@ final class ModelRouter
             $statement->fetchAll(PDO::FETCH_COLUMN)
         )));
 
-        $modelSetting = $provider === 'llama.cpp'
-            ? 'LLAMACPP_MODEL'
-            : 'OLLAMA_MODEL';
-        $defaultModel = $provider === 'llama.cpp'
-            ? 'local-model'
-            : 'qwen2.5:1.5b';
-        $configuredModel = (string) env($modelSetting, $defaultModel);
+        $settings = [
+            'ollama' => ['OLLAMA_MODEL', 'qwen2.5:1.5b'],
+            'llama.cpp' => ['LLAMACPP_MODEL', 'local-model'],
+            'gemini' => ['GEMINI_MODEL', 'gemini-3.8-flash'],
+        ];
+        [$setting, $default] = $settings[$provider];
+        $configured = (string) env($setting, $default);
 
         if ($models === []) {
-            return [$configuredModel];
+            return [$configured];
         }
-
-        if (!in_array($configuredModel, $models, true)) {
-            $models[] = $configuredModel;
+        if (!in_array($configured, $models, true)) {
+            $models[] = $configured;
         }
-
         return $models;
     }
 }

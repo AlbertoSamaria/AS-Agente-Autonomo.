@@ -875,7 +875,7 @@ document.getElementById('newChat')?.addEventListener('click',()=>{
  chat.innerHTML='<div class="welcome"><div class="welcome-logo">SA</div><h2>Nova conversa</h2><p>Qual é a próxima tarefa?</p></div>';
  loadConversationList();
 });
-if(window.SA_USER){document.getElementById('userInfo').textContent=`${SA_USER.name} · ${SA_USER.role}`;}
+if(window.SA_USER){document.getElementById('userInfoName').textContent=`${SA_USER.name} · ${SA_USER.role}`;}
 if(window.SA_USER)loadConversationList();
 async function health(){try{const d=await (await fetch('api/health.php')).json();const provider=d.provider||'ollama';const service=d.providers?.[provider]||d.ollama;const label=provider==='llama.cpp'?'llama.cpp':'Ollama';const on=service?.online;document.getElementById('statusDot').className=on?'online':'offline';document.getElementById('statusText').textContent=on?`${label} online`:`${label} offline`;}catch(e){document.getElementById('statusText').textContent='Backend indisponível';}}
 health();

@@ -18,7 +18,7 @@ final class DocumentProcessor {
             $emb=new EmbeddingService();
             $insert=db()->prepare("INSERT INTO document_chunks(document_id,chunk_index,content,embedding_json) VALUES(?,?,?,?)");
             foreach($chunks as $i=>$chunk){
-                $vector=$emb->embed($chunk);
+                $vector=$emb->embed($chunk, 'RETRIEVAL_DOCUMENT');
                 $insert->execute([$documentId,$i,$chunk,json_encode($vector,JSON_THROW_ON_ERROR)]);
             }
             db()->prepare("UPDATE documents SET status='ready',error_message=NULL WHERE id=?")->execute([$documentId]);

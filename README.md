@@ -31,12 +31,12 @@ Para execução permanente no Windows, usar Task Scheduler ou um serviço dedica
 ## Servidor llama.cpp
 O SA pode usar o Ollama (padrão) ou um servidor `llama.cpp` para o chat. Descarrega/compila o `llama-server` e inicia-o localmente, apontando para um modelo GGUF:
 
-```powershell
+powershell
 & "C:\llama.cpp\b12317\llama-server.exe" `
   -m "C:\models\qwen2.5-1.5b-instruct-q4_k_m.gguf" `
   --alias local-model --host 127.0.0.1 --port 8080 -c 4096 `
   --threads 4 --repeat-penalty 1.18
-```
+
 
 No `.env`, configura `LLM_PROVIDER=llama.cpp`, `LLAMACPP_BASE_URL=http://127.0.0.1:8080` e `LLAMACPP_MODEL=local-model`. O parâmetro `--alias local-model` faz coincidir o nome enviado pelo ModelRouter com o alias anunciado pelo servidor. O serviço de embeddings continua a usar o Ollama (`OLLAMA_EMBEDDING_MODEL`).
 
@@ -63,6 +63,7 @@ O planner valida títulos, prioridades e dependências, rejeita ciclos e grava t
 
 ## Ferramentas do chat
 - Pesquisa web: activa o botão “Pesquisa web” e escreve a pergunta. Usa o serviço HTML do DuckDuckGo; o servidor precisa de acesso à Internet.
+- Perguntas sobre informação temporal (por exemplo, cargos actuais, preços, notícias, datas relativas ou versões recentes) são pesquisadas automaticamente antes da resposta. O utilizador precisa da permissão `tools.web`; sem ela, o agente informa que não pode verificar a informação.
 - Ditado por voz: usa o reconhecimento de voz disponibilizado pelo navegador e pode depender de ligação à Internet e das permissões do microfone.
 - Ficheiros: permite enviar PDF, DOCX, XLSX, TXT e CSV (até 20 MB por ficheiro).
 
