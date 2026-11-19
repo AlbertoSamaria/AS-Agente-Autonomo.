@@ -623,7 +623,11 @@ $canWriteMemories = $user && RBAC::can('memory.write');
          JAVASCRIPT DA APLICAÇÃO
     ========================================================== -->
 
-    <script src="public/assets/app.js"></script>
+    <?php
+    $appJsPath = __DIR__ . '/public/assets/app.js';
+    $appJsVersion = is_file($appJsPath) ? (string) filemtime($appJsPath) : (string) time();
+?>
+    <script src="public/assets/app.js?v=<?php echo htmlspecialchars($appJsVersion, ENT_QUOTES, 'UTF-8'); ?>" defer></script>
 
 </body>
 
