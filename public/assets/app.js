@@ -41,6 +41,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function add(role,text){const e=document.createElement('div');e.className='message '+role;e.innerHTML=`<div class="bubble">${esc(text).replace(/\n/g,'<br>')}</div>`;chat.appendChild(e);chat.scrollTop=chat.scrollHeight;return e;}
 async function loginNow(){
  const button=document.getElementById('loginBtn'), error=document.getElementById('loginError');
+ if(!button||!error)return;
  button.disabled=true;error.textContent='';
  try{
    const r=await fetch('api/auth.php?action=login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('password').value})});
@@ -617,6 +618,7 @@ function closeActionMenu(){
  actionMenuBtn?.setAttribute('aria-expanded','false');
 }
 actionMenuBtn?.addEventListener('click',()=>{
+ if(!actionMenu)return;
  const open=actionMenu.classList.toggle('hidden')===false;
  actionMenuBtn.setAttribute('aria-expanded',String(open));
 });
@@ -686,7 +688,7 @@ actionMenu?.addEventListener('click',event=>{
      webSearchEnabled=!webSearchEnabled;
      button.setAttribute('aria-pressed',String(webSearchEnabled));
      button.classList.toggle('active',webSearchEnabled);
-     button.querySelector('span:last-child').textContent=webSearchEnabled?'Pesquisa na web · activa':'Pesquisa na web';
+     const label=button.querySelector('span:last-child');if(label)label.textContent=webSearchEnabled?'Pesquisa na web · activa':'Pesquisa na web';
      break;
  }
 });
@@ -802,7 +804,7 @@ async function sendMessage(text){
  if(!text.trim())return;
  const message=webSearchEnabled?'Pesquisa na web: '+text.trim():text.trim();
  document.querySelector('.welcome')?.remove();add('user',message);input.value='';
- const send=document.getElementById('sendBtn');send.disabled=true;send.textContent='…';
+ const send=document.getElementById('sendBtn');if(send){send.disabled=true;send.textContent='…';}
  try{
    const response=await fetch('api/stream.php',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),body:JSON.stringify({message,conversation_id:conversationId,document_ids:Array.from(selectedDocuments.keys())})});
    if(!response.ok||!response.body){
@@ -849,7 +851,7 @@ async function sendMessage(text){
    if(!streamedContent&&!streamError)bubble.textContent='Sem resposta.';
    if(streamError)bubble.textContent=(streamedContent?streamedContent+'\n\n':'')+'Erro: '+streamError;
    if(completed)await loadConversationList();
- }catch(e){add('assistant','Erro: '+e.message)}finally{send.disabled=false;send.textContent='Enviar';}
+ }catch(e){add('assistant','Erro: '+e.message)}finally{if(send){send.disabled=false;send.textContent='Enviar';}}
 }
 form?.addEventListener('submit',e=>{e.preventDefault();sendMessage(input.value);});
 input?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});
