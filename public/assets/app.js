@@ -626,8 +626,13 @@ document.addEventListener('click',event=>{
 document.addEventListener('keydown',event=>{
  if(event.key==='Escape'){closeActionMenu();closeNavigationPanel();sidebar?.classList.remove('open');app?.classList.remove('sidebar-open');}
 });
+function setUploadStatus(message){
+ const status=document.getElementById('uploadStatus');
+ if(status)status.textContent=message;
+}
 function renderSelectedDocuments(){
  const container=document.getElementById('selectedDocuments');
+ if(!container)return;
  container.replaceChildren();
  for(const [id,name] of selectedDocuments){
    const chip=document.createElement('span');chip.className='document-chip';
@@ -688,42 +693,41 @@ actionMenu?.addEventListener('click',event=>{
 fileInput?.addEventListener('change',async()=>{
  const files=Array.from(fileInput.files||[]);
  for(const file of files){
-   const status=document.getElementById('uploadStatus');
-   status.textContent=`A enviar ${file.name}…`;
+   setUploadStatus(`A enviar ${file.name}…`);
    try{
      const body=new FormData();body.append('file',file);
      const upload=await fetch('api/upload.php',{method:'POST',headers:csrfHeaders(),body});
      const document=await upload.json();
      if(!upload.ok||!document.success)throw new Error(document.error||'Não foi possível enviar o ficheiro.');
-     status.textContent=`A processar ${file.name}…`;
+     setUploadStatus(`A processar ${file.name}…`);
      const process=await fetch('api/process_document.php',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),body:JSON.stringify({document_id:document.document_id})});
      const result=await process.json();
      if(!process.ok||!result.success)throw new Error(result.error||'Não foi possível processar o ficheiro.');
      selectedDocuments.set(String(document.document_id),document.name);
      renderSelectedDocuments();
-     status.textContent=`${file.name} pronto para consulta.`;
-   }catch(error){status.textContent=`Erro em ${file.name}: ${error.message}`;}
+     setUploadStatus(`${file.name} pronto para consulta.`);
+   }catch(error){setUploadStatus(`Erro em ${file.name}: ${error.message}`);}
  }
  fileInput.value='';
 });
 const voiceBtn=document.getElementById('voiceBtn');
 voiceBtn?.addEventListener('click',()=>{
  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SpeechRecognition){document.getElementById('uploadStatus').textContent='O ditado por voz não é suportado neste navegador.';return;}
+ if(!SpeechRecognition){setUploadStatus('O ditado por voz não é suportado neste navegador.');return;}
  const recognition=new SpeechRecognition();
  recognition.lang='pt-PT';recognition.interimResults=false;recognition.maxAlternatives=1;
- voiceBtn.disabled=true;document.getElementById('uploadStatus').textContent='A ouvir… o reconhecimento de voz é fornecido pelo navegador.';
+ voiceBtn.disabled=true;setUploadStatus('A ouvir… o reconhecimento de voz é fornecido pelo navegador.');
  recognition.onresult=event=>{
    const spoken=event.results[0][0].transcript;
    input.value=(input.value.trim()?input.value.trim()+' ':'')+spoken;
    input.focus();
-   document.getElementById('uploadStatus').textContent='Ditado inserido.';
+   setUploadStatus('Ditado inserido.');
  };
- recognition.onerror=event=>{document.getElementById('uploadStatus').textContent='Erro no ditado: '+event.error;};
+ recognition.onerror=event=>{setUploadStatus('Erro no ditado: '+event.error);};
  recognition.onend=()=>{voiceBtn.disabled=false;};
  try{recognition.start();}catch(error){
    voiceBtn.disabled=false;
-   document.getElementById('uploadStatus').textContent='Não foi possível iniciar o ditado: '+error.message;
+   setUploadStatus('Não foi possível iniciar o ditado: '+error.message);
  }
 });
 function normalizeNumberedLists(text){
