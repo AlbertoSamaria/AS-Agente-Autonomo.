@@ -301,7 +301,15 @@ final class DocumentProcessor
             throw new RuntimeException('Este PDF excede 20 MB e não pode ser enviado ao serviço de extracção Gemini.');
         }
 
-        $model = trim((string)env('GEMINI_PDF_MODEL', env('GEMINI_MODEL', 'gemini-3.8-flash')));
+        // A extracção de PDFs usa um modelo próprio. Não herdar GEMINI_MODEL,
+        // pois essa variável pode continuar configurada com modelos descontinuados.
+        $model = trim((string)env('GEMINI_PDF_MODEL', 'gemini-3.8-flash'));
+        $model = preg_replace('#^models/#', '', $model) ?: 'gemini-3.8-flash';
+
+        // Corrigir automaticamente configurações antigas que já não aceitam novos pedidos.
+        if (in_array(strtolower($model), ['gemini-2.5-flash', 'gemini-2.5-flash-latest'], true)) {
+            $model = 'gemini-3.8-flash';
+        }
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' .
             rawurlencode($model) . ':generateContent';
 
