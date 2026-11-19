@@ -782,12 +782,19 @@ function normalizeNumberedLists(text){
 }
 
 async function sendMessage(text){
- if(!text.trim())return;
- const message=webSearchEnabled?'Pesquisa na web: '+text.trim():text.trim();
+ const typedText=String(text||'').trim();
+ const documentIds=Array.from(selectedDocuments.keys());
+ if(!typedText&&documentIds.length===0){
+  setUploadStatus('Escreve uma mensagem ou anexa pelo menos um ficheiro antes de enviar.');
+  input?.focus();
+  return;
+ }
+ const prompt=typedText||'Analisa o(s) ficheiro(s) anexado(s), consulta o seu conteúdo e apresenta um resumo dos pontos mais importantes.';
+ const message=webSearchEnabled?'Pesquisa na web: '+prompt:prompt;
  document.querySelector('.welcome')?.remove();add('user',message);input.value='';
  const send=document.getElementById('sendBtn');if(send){send.disabled=true;send.textContent='…';}
  try{
-   const response=await fetch('api/stream.php',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),body:JSON.stringify({message,conversation_id:conversationId,document_ids:Array.from(selectedDocuments.keys())})});
+   const response=await fetch('api/stream.php',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},csrfHeaders()),body:JSON.stringify({message,conversation_id:conversationId,document_ids:documentIds})});
    if(!response.ok||!response.body){
      const errorData=await response.json().catch(()=>({}));
      throw new Error(errorData.error||'Não foi possível iniciar o streaming.');
