@@ -627,7 +627,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
     $appJsPath = __DIR__ . '/public/assets/app.js';
     $appJsVersion = is_file($appJsPath) ? (string) filemtime($appJsPath) : (string) time();
 ?>
-    <script src="public/assets/app-v2.js?v=<?php echo htmlspecialchars((string) @filemtime(__DIR__ . '/public/assets/app-v2.js'), ENT_QUOTES, 'UTF-8'); ?>" defer></script>
+    <script src="/public/assets/app-v2.js?v=<?php echo rawurlencode((string) (@filemtime(__DIR__ . '/public/assets/app-v2.js') ?: time())); ?>" defer></script>
 
 </body>
 
