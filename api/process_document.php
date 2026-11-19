@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once dirname(__DIR__).'/config/config.php';
 require_once dirname(__DIR__).'/middleware/RBAC.php';
-require_once dirname(__DIR__).'/services/rag/DocumentProcessor.php';
+require_once dirname(__DIR__).'/services/rag/DocumentProcessorV2.php';
 try{
     RBAC::require('rag.write'); require_post(); Auth::requireCsrf();
     $d=json_decode(file_get_contents('php://input'),true)?:[];
