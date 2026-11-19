@@ -219,11 +219,134 @@ final class DocumentProcessor
                 throw new RuntimeException('Não foi possível ler o PDF.');
             }
 
-            preg_match_all('/\(([^\)]{2,})\)/s', $raw, $matches);
-            return implode("\n", $matches[1] ?? []);
+            $text = $this->extractPdfText($raw);
+
+            if (trim($text) === '') {
+                throw new RuntimeException(
+                    'Não foi possível extrair texto deste PDF. O ficheiro pode ser digitalizado, protegido ou usar uma estrutura de texto não suportada.'
+                );
+            }
+
+            return $text;
         }
 
         throw new RuntimeException('Formato não suportado: ' . $mime);
+    }
+
+    /**
+     * Extrai texto de PDFs com streams PDF, incluindo FlateDecode.
+     */
+    private function extractPdfText(string $raw): string
+    {
+        $output = [];
+
+        if (preg_match_all('/<<(.*?)>>\\s*stream\\r?\\n(.*?)\\r?\\nendstream/s', $raw, $streams, PREG_SET_ORDER)) {
+            foreach ($streams as $stream) {
+                $dictionary = $stream[1];
+                $data = $stream[2];
+
+                if (str_contains($dictionary, '/FlateDecode')) {
+                    $decoded = @gzuncompress($data);
+
+                    if ($decoded === false) {
+                        $decoded = @gzinflate($data);
+                    }
+
+                    if ($decoded === false) {
+                        $decoded = @gzdecode($data);
+                    }
+
+                    if ($decoded === false) {
+                        continue;
+                    }
+
+                    $data = $decoded;
+                }
+
+                if (!str_contains($data, 'Tj') && !str_contains($data, 'TJ')) {
+                    continue;
+                }
+
+                $output[] = $this->decodePdfTextStream($data);
+            }
+        }
+
+        return trim(implode("\n", $output));
+    }
+
+    private function decodePdfTextStream(string $stream): string
+    {
+        $parts = [];
+
+        if (preg_match_all('/\\((?:\\\\.|[^\\\\()])*\\)\\s*Tj/s', $stream, $matches)) {
+            foreach ($matches[0] as $match) {
+                $value = preg_replace('/\\s*Tj$/s', '', $match);
+                $value = $this->decodePdfLiteralString($value);
+                if ($value !== '') {
+                    $parts[] = $value;
+                }
+            }
+        }
+
+        if (preg_match_all('/\\[(.*?)\\]\\s*TJ/s', $stream, $arrays, PREG_SET_ORDER)) {
+            foreach ($arrays as $array) {
+                if (preg_match_all('/\\((?:\\\\.|[^\\\\()])*\\)/s', $array[1], $strings)) {
+                    $line = '';
+                    foreach ($strings[0] as $string) {
+                        $line .= $this->decodePdfLiteralString($string);
+                    }
+                    if (trim($line) !== '') {
+                        $parts[] = $line;
+                    }
+                }
+            }
+        }
+
+        return implode("\n", $parts);
+    }
+
+    private function decodePdfLiteralString(string $value): string
+    {
+        $value = trim($value);
+
+        if (strlen($value) >= 2 && $value[0] === '(' && $value[strlen($value) - 1] === ')') {
+            $value = substr($value, 1, -1);
+        }
+
+        $value = preg_replace_callback(
+            '/\\\\([0-7]{1,3}|n|r|t|b|f|\\\\|\\(|\\))/',
+            static function (array $match): string {
+                return match ($match[1]) {
+                    'n' => "\n",
+                    'r' => "\r",
+                    't' => "\t",
+                    'b' => "\b",
+                    'f' => "\f",
+                    '\\\\' => "\\\\",
+                    '\\(' => '(',
+                    '\\)' => ')',
+                    default => chr(octdec($match[1])),
+                };
+            },
+            $value
+        ) ?? $value;
+
+        if (str_starts_with($value, "\xFE\xFF") && function_exists('mb_convert_encoding')) {
+            $converted = @mb_convert_encoding(substr($value, 2), 'UTF-8', 'UTF-16BE');
+            if ($converted !== false) {
+                return $converted;
+            }
+        }
+
+        if (preg_match('//u', $value) !== 1 && function_exists('iconv')) {
+            $converted = @iconv('Windows-1252', 'UTF-8//IGNORE', $value);
+            if ($converted !== false) {
+                return $converted;
+            }
+        }
+
+        return $value;
+    }
     }
 
     private function chunk(string $text, int $size, int $overlap): array
