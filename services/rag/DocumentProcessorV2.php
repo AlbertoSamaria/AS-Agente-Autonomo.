@@ -60,7 +60,9 @@ final class DocumentProcessor
                 ];
             }
 
-            $pdo = db();
+            // Os pedidos de embeddings podem demorar; reconectar evita reutilizar
+            // uma ligação MySQL fechada pelo wait_timeout da hospedagem.
+            $pdo = db(true);
             $pdo->beginTransaction();
 
             try {
@@ -88,9 +90,14 @@ final class DocumentProcessor
 
             return ['success' => true, 'chunks' => count($chunks)];
         } catch (Throwable $error) {
-            // Não apagar chunks anteriores: uma falha de reprocessamento não deve destruir dados existentes.
-            db()->prepare("UPDATE documents SET status = 'failed', error_message = ? WHERE id = ?")
-                ->execute([mb_substr($error->getMessage(), 0, 2000), $documentId]);
+            // Reconectar: o MySQL pode ter fechado a ligação durante chamadas externas de IA.
+            // A falha ao actualizar o estado não deve ocultar a excepção original.
+            try {
+                db(true)->prepare("UPDATE documents SET status = 'failed', error_message = ? WHERE id = ?")
+                    ->execute([mb_substr($error->getMessage(), 0, 2000), $documentId]);
+            } catch (Throwable $statusError) {
+                error_log('SA DocumentProcessor: não foi possível actualizar o estado do documento: ' . $statusError->getMessage());
+            }
 
             throw $error;
         }
