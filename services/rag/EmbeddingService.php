@@ -12,7 +12,13 @@ final class EmbeddingService
             throw new InvalidArgumentException('Nao e possivel gerar embedding para texto vazio.');
         }
 
-        $provider = strtolower((string) env('EMBEDDING_PROVIDER', 'ollama'));
+        // Em produção, se o fornecedor principal do agente for Gemini e a chave existir,
+        // usar Gemini Embedding por omissão. Ollama só fica como fallback local explícito.
+        $defaultProvider = strtolower((string) env('LLM_PROVIDER', 'ollama')) === 'gemini'
+            && trim((string) env('GEMINI_API_KEY', '')) !== ''
+            ? 'gemini'
+            : 'ollama';
+        $provider = strtolower(trim((string) env('EMBEDDING_PROVIDER', $defaultProvider)));
         if ($provider === 'gemini') {
             return $this->geminiEmbedding($text, $taskType);
         }
