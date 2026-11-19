@@ -265,9 +265,16 @@ final class DocumentProcessor
 
             $text = $this->extractPdfText($raw);
 
+            // O extractor nativo cobre PDFs simples. Para PDFs com object streams,
+            // fontes/CMaps complexos ou páginas digitalizadas, usar Gemini como
+            // extractor de documento quando a chave cloud está configurada.
+            if (trim($text) === '' && trim((string)env('GEMINI_API_KEY', '')) !== '') {
+                $text = $this->extractPdfWithGemini($raw);
+            }
+
             if (trim($text) === '') {
                 throw new RuntimeException(
-                    'Não foi possível extrair texto deste PDF. O ficheiro pode ser digitalizado, protegido ou usar uma estrutura de texto não suportada.'
+                    'Não foi possível extrair texto deste PDF. O PDF pode estar protegido por palavra-passe ou não conter texto legível. Se for digitalizado, confirma que a chave Gemini está configurada para permitir a leitura assistida.'
                 );
             }
 
@@ -275,6 +282,98 @@ final class DocumentProcessor
         }
 
         throw new RuntimeException('Formato não suportado: ' . $mime);
+    }
+
+    /**
+     * Extrai texto de PDFs complexos ou digitalizados através da API Gemini.
+     * O ficheiro não é guardado pelo fornecedor; é enviado apenas no pedido.
+     */
+    private function extractPdfWithGemini(string $pdfBytes): string
+    {
+        $key = trim((string)env('GEMINI_API_KEY', ''));
+        if ($key === '') {
+            return '';
+        }
+
+        // O limite da aplicação é 20 MB; o limite de PDF inline do Gemini
+        // é superior a esse valor nos modelos Gemini 3.
+        if (strlen($pdfBytes) > 20 * 1024 * 1024) {
+            throw new RuntimeException('Este PDF excede 20 MB e não pode ser enviado ao serviço de extracção Gemini.');
+        }
+
+        $model = trim((string)env('GEMINI_PDF_MODEL', env('GEMINI_MODEL', 'gemini-3.8-flash')));
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' .
+            rawurlencode($model) . ':generateContent';
+
+        $payload = json_encode([
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [
+                    ['text' => 'Extrai integralmente o texto legível deste PDF. Mantém a ordem original das páginas, títulos, parágrafos, listas, datas, números, tabelas e contactos. Não resumas, não inventes conteúdo e não omitas texto legível. Se uma página for digitalizada ou contiver texto numa imagem, faz OCR visual e transcreve o que conseguires ler. Se não conseguires ler uma parte, indica [texto ilegível]. Devolve apenas o texto extraído.'],
+                    ['inline_data' => [
+                        'mime_type' => 'application/pdf',
+                        'data' => base64_encode($pdfBytes)
+                    ]]
+                ]
+            ]],
+            'generationConfig' => [
+                'temperature' => 0.1,
+                'maxOutputTokens' => 8192
+            ]
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($payload === false) {
+            throw new RuntimeException('Não foi possível preparar o PDF para extracção Gemini.');
+        }
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            throw new RuntimeException('Não foi possível iniciar o serviço de extracção Gemini.');
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $key
+            ],
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_TIMEOUT => (int)env('GEMINI_PDF_TIMEOUT', 180)
+        ]);
+
+        $raw = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $error = curl_error($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($errno !== 0) {
+            throw new RuntimeException('O serviço Gemini de leitura de PDF não respondeu: ' . $error);
+        }
+
+        $response = json_decode((string)$raw, true);
+        if ($status >= 400) {
+            $message = $response['error']['message'] ?? ('HTTP ' . $status);
+            throw new RuntimeException('Gemini não conseguiu ler o PDF: ' . $message);
+        }
+
+        $parts = $response['candidates'][0]['content']['parts'] ?? [];
+        $textParts = [];
+        foreach ($parts as $part) {
+            if (isset($part['text']) && is_string($part['text'])) {
+                $textParts[] = $part['text'];
+            }
+        }
+
+        $text = trim(implode("\n", $textParts));
+        if ($text === '') {
+            $reason = $response['promptFeedback']['blockReason'] ?? 'resposta vazia';
+            throw new RuntimeException('Gemini não devolveu texto extraído do PDF (' . $reason . ').');
+        }
+
+        return $text;
     }
 
     /**
