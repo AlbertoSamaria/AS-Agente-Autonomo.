@@ -8,15 +8,18 @@ final class DocumentProcessor
 {
     public function process(int $documentId): array
     {
-        $statement = db()->prepare('SELECT * FROM documents WHERE id = ?');
+        $initialPdo = db(true);
+        $statement = $initialPdo->prepare('SELECT * FROM documents WHERE id = ?');
         $statement->execute([$documentId]);
         $document = $statement->fetch();
+        $statement->closeCursor();
+        unset($statement, $initialPdo);
 
         if (!$document) {
             throw new RuntimeException('Documento inexistente.');
         }
 
-        db()->prepare("UPDATE documents SET status = 'processing', error_message = NULL WHERE id = ?")
+        db(true)->prepare("UPDATE documents SET status = 'processing', error_message = NULL WHERE id = ?")
             ->execute([$documentId]);
 
         try {
@@ -60,32 +63,50 @@ final class DocumentProcessor
                 ];
             }
 
-            // Os pedidos de embeddings podem demorar; reconectar evita reutilizar
-            // uma ligação MySQL fechada pelo wait_timeout da hospedagem.
-            $pdo = db(true);
-            $pdo->beginTransaction();
+            // As chamadas externas de embeddings podem deixar a ligação MySQL
+            // inactiva até o alojamento a encerrar. Persistimos com ligação nova
+            // e repetimos uma vez apenas em erros de ligação perdida.
+            $persisted = false;
+            for ($attempt = 0; $attempt < 2; $attempt++) {
+                $pdo = db(true);
+                try {
+                    $pdo->beginTransaction();
 
-            try {
-                $pdo->prepare('DELETE FROM document_chunks WHERE document_id = ?')
-                    ->execute([$documentId]);
+                    $pdo->prepare('DELETE FROM document_chunks WHERE document_id = ?')
+                        ->execute([$documentId]);
 
-                $insert = $pdo->prepare(
-                    'INSERT INTO document_chunks (document_id, chunk_index, content, embedding_json) VALUES (?, ?, ?, ?)'
-                );
+                    $insert = $pdo->prepare(
+                        'INSERT INTO document_chunks (document_id, chunk_index, content, embedding_json) VALUES (?, ?, ?, ?)'
+                    );
 
-                foreach ($preparedChunks as [$index, $chunk, $embeddingJson]) {
-                    $insert->execute([$documentId, $index, $chunk, $embeddingJson]);
+                    foreach ($preparedChunks as [$index, $chunk, $embeddingJson]) {
+                        $insert->execute([$documentId, $index, $chunk, $embeddingJson]);
+                    }
+
+                    $pdo->commit();
+                    $persisted = true;
+                    break;
+                } catch (Throwable $databaseError) {
+                    try {
+                        if ($pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
+                    } catch (Throwable $rollbackError) {
+                        error_log('SA DocumentProcessor rollback: ' . $rollbackError->getMessage());
+                    }
+
+                    if ($attempt === 0 && $this->isLostDatabaseConnection($databaseError)) {
+                        continue;
+                    }
+                    throw $databaseError;
                 }
-
-                $pdo->commit();
-            } catch (Throwable $databaseError) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
-                throw $databaseError;
             }
 
-            $pdo->prepare("UPDATE documents SET status = 'ready', error_message = NULL WHERE id = ?")
+            if (!$persisted) {
+                throw new RuntimeException('Não foi possível guardar os blocos do documento na base de dados.');
+            }
+
+            db(true)->prepare("UPDATE documents SET status = 'ready', error_message = NULL WHERE id = ?")
                 ->execute([$documentId]);
 
             return ['success' => true, 'chunks' => count($chunks)];
@@ -101,6 +122,22 @@ final class DocumentProcessor
 
             throw $error;
         }
+    }
+
+    private function isLostDatabaseConnection(Throwable $error): bool
+    {
+        $message = strtolower($error->getMessage());
+        if (str_contains($message, 'server has gone away')
+            || str_contains($message, 'lost connection')
+            || str_contains($message, 'connection was killed')) {
+            return true;
+        }
+
+        if ($error instanceof PDOException && isset($error->errorInfo[1])) {
+            return in_array((int)$error->errorInfo[1], [2006, 2013], true);
+        }
+
+        return false;
     }
 
     private function normalizeText(string $text): string
