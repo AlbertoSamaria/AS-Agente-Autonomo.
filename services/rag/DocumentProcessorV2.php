@@ -347,7 +347,6 @@ final class DocumentProcessor
 
         return $value;
     }
-    }
 
     private function chunk(string $text, int $size, int $overlap): array
     {
