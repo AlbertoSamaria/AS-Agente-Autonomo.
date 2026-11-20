@@ -52,6 +52,55 @@ async function loginNow(){
 }
 document.getElementById('loginBtn')?.addEventListener('click',loginNow);
 document.getElementById('password')?.addEventListener('keydown',e=>{if(e.key==='Enter')loginNow();});
+
+const loginView=document.getElementById('loginView');
+const registerView=document.getElementById('registerView');
+function showAuthView(view){
+ if(!loginView||!registerView)return;
+ const registering=view==='register';
+ loginView.classList.toggle('hidden',registering);
+ registerView.classList.toggle('hidden',!registering);
+ const target=registering?document.getElementById('registerName'):document.getElementById('email');
+ target?.focus();
+}
+document.getElementById('showRegisterBtn')?.addEventListener('click',()=>showAuthView('register'));
+document.getElementById('showLoginBtn')?.addEventListener('click',()=>showAuthView('login'));
+
+async function registerNow(){
+ const button=document.getElementById('registerBtn');
+ const error=document.getElementById('registerError');
+ const name=document.getElementById('registerName')?.value.trim()||'';
+ const email=document.getElementById('registerEmail')?.value.trim()||'';
+ const password=document.getElementById('registerPassword')?.value||'';
+ const confirmation=document.getElementById('registerPasswordConfirm')?.value||'';
+ if(!button||!error)return;
+ error.textContent='';
+ if(password!==confirmation){error.textContent='As palavras-passe não coincidem.';return;}
+ if(password.length<10){error.textContent='A palavra-passe deve ter pelo menos 10 caracteres.';return;}
+ button.disabled=true;
+ try{
+   const response=await fetch('api/auth.php?action=register',{
+     method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({name,email,password,password_confirmation:confirmation})
+   });
+   const data=await response.json();
+   if(!response.ok||!data.success)throw new Error(data.error||'Não foi possível criar a conta.');
+   error.textContent='Conta criada com sucesso. A entrar…';
+   location.reload();
+ }catch(exception){
+   error.textContent=exception.message||'Erro ao criar a conta.';
+ }finally{
+   button.disabled=false;
+ }
+}
+document.getElementById('registerBtn')?.addEventListener('click',registerNow);
+['registerName','registerEmail','registerPassword','registerPasswordConfirm'].forEach(id=>{
+ document.getElementById(id)?.addEventListener('keydown',event=>{
+   if(event.key==='Enter'){event.preventDefault();registerNow();}
+ });
+});
+
 document.getElementById('logoutBtn')?.addEventListener('click',async e=>{
  const button=e.currentTarget;
  button.disabled=true;
