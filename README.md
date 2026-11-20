@@ -27,7 +27,7 @@ Base evoluída do SA com autenticação/RBAC, planner, dependências, memória s
 - O registo pede nome, email e palavra-passe com pelo menos 10 caracteres.
 - Cada conta pública é criada como utilizador normal (`viewer`); o formulário nunca permite escolher funções administrativas.
 - As palavras-passe são guardadas com `password_hash()` e as tentativas de registo são limitadas por endereço IP.
-- O registo inicia a sessão automaticamente. A verificação de email não está activada nesta versão.
+- O registo exige confirmação do e-mail antes do primeiro login. A recuperação de palavra-passe é feita por link temporário enviado para o e-mail confirmado.
 
 ## Segurança de contas (SA 1.3.7)
 - Novas contas ficam pendentes até à confirmação do e-mail.
