@@ -20,10 +20,23 @@ final class Gemini
 
     private function model(?string $model): string
     {
-        return $model ?: (string) env(
+        $configured = trim((string) ($model ?: env(
             'GEMINI_MODEL',
             'gemini-3.8-flash'
-        );
+        )));
+
+        // Migração defensiva para projetos que ainda possuem Gemini 2.5
+        // configurado no .env ou num registo antigo de modelos.
+        $configured = preg_replace('#^models/#', '', $configured) ?: 'gemini-3.8-flash';
+
+        if (in_array(strtolower($configured), [
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-latest',
+        ], true)) {
+            return 'gemini-3.8-flash';
+        }
+
+        return $configured;
     }
 
     private function requestUrl(

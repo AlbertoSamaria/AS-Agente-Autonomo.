@@ -204,7 +204,7 @@ Memórias relevantes:';
                 (int) env('AGENT_CONTEXT_MAX_CHARS', 24000)
             );
 
-            if ($this->requiresCurrentInformation($input)) {
+            if ($this->requiresCurrentInformation($input) || $this->explicitWebSearchRequest($input)) {
                 if (!$this->hasPermission($userId, $this->tools->permission('web.search'))) {
                     $content = 'Para responder com informação actualizada, preciso de permissão para pesquisar na Internet.';
                     $this->finishRun($runId, $content, 'completed');
@@ -694,6 +694,14 @@ Produz uma resposta normal, clara e útil.';
     {
         return (bool) preg_match(
             '/\\b(programa|programar|c[oó]digo|codifica|desenvolve|desenvolver|cria|criar|constr[oó]i|construir|implementa|implementar|debug|corrige|corrigir|php|javascript|python|html|css|sql|laravel|react|vue|framework|aplica[cç][aã]o|site|p[aá]gina web)\\b/iu',
+            $input
+        );
+    }
+
+    private function explicitWebSearchRequest(string $input): bool
+    {
+        return (bool) preg_match(
+            '/\b(pesquisa|pesquisar|pesquise|procura|procurar|consulta|consultar|verifica|verificar)\b.*\b(web|internet|online|fontes|not[ií]cias|inform[aã]cao)\b/iu',
             $input
         );
     }
