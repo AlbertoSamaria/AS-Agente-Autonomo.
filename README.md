@@ -1,4 +1,4 @@
-# SA — Agente Autónomo 1.3.2
+# SA — Agente Autónomo 1.3.5
 
 Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, ModelRouter/fallback, streaming e Project Analyzer read-only.
 
@@ -77,6 +77,10 @@ A interface inclui temas claro e escuro, com preferência guardada localmente no
 
 ## Planos e tarefas
 O planner valida títulos, prioridades e dependências, rejeita ciclos e grava tarefas e dependências numa transação, associadas à conta que pediu o plano. Consultas e alterações de tarefas também são limitadas ao proprietário.
+
+## Orquestração de ferramentas
+
+O agente pode encadear até quatro ferramentas numa única execução. Depois de cada resultado, o orquestrador pede ao modelo que decida se existe outra operação necessária para cumprir o pedido ou se já pode responder. Cada passo valida novamente a intenção explícita e a permissão RBAC, regista a operação na auditoria, evita chamadas repetidas e limita o tamanho dos resultados enviados ao modelo. Ferramentas sensíveis continuam sujeitas a aprovação humana. Este mecanismo não executa código arbitrário nem substitui uma sandbox isolada.
 
 ## Ferramentas do chat
 - Pesquisa web: activa o botão “Pesquisa web” e escreve a pergunta. Usa o serviço HTML do DuckDuckGo; o servidor precisa de acesso à Internet.
