@@ -407,7 +407,7 @@ Produz uma resposta normal, clara e útil.';
                     (int) $userId,
                     fn(string $name): bool => $this->hasPermission($userId, $this->tools->permission($name)),
                     fn(string $name): bool => $this->hasExplicitIntent($input, $name),
-                    fn(string $name, array $args, array $toolResult): void => $this->audit($userId, $name, $args, $toolResult),
+                    function (string $name, array $args, array $toolResult) use ($userId): void { $this->audit($userId, $name, $args, $toolResult); },
                     function (string $name, array $args) use ($userId, $runId): array {
                         $approvalId = $this->approvals->create(
                             (int) $userId,
