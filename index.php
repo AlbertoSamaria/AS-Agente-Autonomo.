@@ -47,27 +47,51 @@ $canWriteMemories = $user && RBAC::can('memory.write');
             <button id="themeToggleLogin" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">☀️</button>
             <div class="welcome-logo">SA</div>
 
-            <h1>Seu chat</h1>
+            <section id="loginView">
+                <h1>Entrar no SA</h1>
+                <p>Acede à tua conta para continuares.</p>
 
-            <input
-                id="email"
-                type="email"
-                placeholder="Email"
-                autocomplete="email"
-            >
+                <input
+                    id="email"
+                    type="email"
+                    placeholder="Email"
+                    autocomplete="username"
+                    maxlength="190"
+                    required
+                >
 
-            <input
-                id="password"
-                type="password"
-                placeholder="Palavra-passe"
-                autocomplete="current-password"
-            >
+                <input
+                    id="password"
+                    type="password"
+                    placeholder="Palavra-passe"
+                    autocomplete="current-password"
+                    required
+                >
 
-            <button id="loginBtn" type="button">
-                Entrar
-            </button>
+                <button id="loginBtn" type="button">Entrar</button>
+                <div id="loginError" role="alert" aria-live="polite"></div>
 
-            <div id="loginError"></div>
+                <p class="login-switch">Ainda não tens conta?
+                    <button id="showRegisterBtn" class="login-link" type="button">Criar conta</button>
+                </p>
+            </section>
+
+            <section id="registerView" class="hidden" aria-labelledby="registerTitle">
+                <h1 id="registerTitle">Criar conta</h1>
+                <p>Regista-te gratuitamente para começar a utilizar o SA.</p>
+
+                <input id="registerName" type="text" placeholder="Nome completo" autocomplete="name" maxlength="120" required>
+                <input id="registerEmail" type="email" placeholder="Email" autocomplete="email" maxlength="190" required>
+                <input id="registerPassword" type="password" placeholder="Criar palavra-passe (mínimo 10 caracteres)" autocomplete="new-password" minlength="10" required>
+                <input id="registerPasswordConfirm" type="password" placeholder="Confirmar palavra-passe" autocomplete="new-password" minlength="10" required>
+
+                <button id="registerBtn" type="button">Criar a minha conta</button>
+                <div id="registerError" role="alert" aria-live="polite"></div>
+
+                <p class="login-switch">Já tens uma conta?
+                    <button id="showLoginBtn" class="login-link" type="button">Voltar ao login</button>
+                </p>
+            </section>
 
         </div>
 
