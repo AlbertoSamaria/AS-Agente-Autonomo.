@@ -74,6 +74,26 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                 <p class="login-switch">Ainda não tens conta?
                     <button id="showRegisterBtn" class="login-link" type="button">Criar conta</button>
                 </p>
+                <p class="login-switch"><button id="showForgotBtn" class="login-link" type="button">Esqueci-me da palavra-passe</button></p>
+            </section>
+
+            <section id="forgotView" class="hidden" aria-labelledby="forgotTitle">
+                <h1 id="forgotTitle">Recuperar acesso</h1>
+                <p>Indica o e-mail associado à tua conta. Enviaremos instruções para recuperares o acesso.</p>
+                <input id="forgotEmail" type="email" placeholder="O teu e-mail" autocomplete="email" maxlength="190" required>
+                <button id="requestResetBtn" type="button">Enviar link de recuperação</button>
+                <div id="forgotError" role="alert" aria-live="polite"></div>
+                <p class="login-switch"><button id="forgotBackBtn" class="login-link" type="button">Voltar ao login</button></p>
+            </section>
+
+            <section id="resetView" class="hidden" aria-labelledby="resetTitle">
+                <h1 id="resetTitle">Definir nova palavra-passe</h1>
+                <p>Escolhe uma nova palavra-passe com pelo menos 10 caracteres.</p>
+                <input id="resetPassword" type="password" placeholder="Nova palavra-passe" autocomplete="new-password" minlength="10" required>
+                <input id="resetPasswordConfirm" type="password" placeholder="Confirmar palavra-passe" autocomplete="new-password" minlength="10" required>
+                <button id="resetPasswordBtn" type="button">Guardar nova palavra-passe</button>
+                <div id="resetError" role="alert" aria-live="polite"></div>
+                <p class="login-switch"><button id="resetBackBtn" class="login-link" type="button">Voltar ao login</button></p>
             </section>
 
             <section id="registerView" class="hidden" aria-labelledby="registerTitle">
@@ -87,6 +107,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
 
                 <button id="registerBtn" type="button">Criar a minha conta</button>
                 <div id="registerError" role="alert" aria-live="polite"></div>
+                <button id="resendVerificationBtn" class="login-secondary hidden" type="button">Reenviar confirmação</button>
 
                 <p class="login-switch">Já tens uma conta?
                     <button id="showLoginBtn" class="login-link" type="button">Voltar ao login</button>
