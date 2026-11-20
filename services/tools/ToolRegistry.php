@@ -8,6 +8,7 @@ require_once __DIR__ . '/FileTool.php';
 require_once __DIR__ . '/SqlTool.php';
 require_once __DIR__ . '/CodeWorkspaceTool.php';
 require_once __DIR__ . '/ProjectAnalyzer.php';
+require_once __DIR__ . '/SystemTool.php';
 require_once dirname(__DIR__) . '/planner/Planner.php';
 
 final class ToolRegistry
@@ -21,6 +22,7 @@ final class ToolRegistry
         'web.search',
         'files.list',
         'sql.read',
+        'system.health',
         'code.project.create',
         'code.workspace.list',
         'code.file.read',
@@ -55,6 +57,7 @@ final class ToolRegistry
             'web.search' => (new WebTool())->search((string) ($args['query'] ?? '')),
             'files.list' => (new FileTool())->listUploads($userId),
             'sql.read' => (new SqlTool())->read((string) ($args['sql'] ?? '')),
+            'system.health' => (new SystemTool())->health(),
             'code.project.create' => $code->createProject($args, $userId),
             'code.workspace.list' => $code->list($args, $userId),
             'code.file.read' => $code->read($args, $userId),
@@ -77,6 +80,7 @@ final class ToolRegistry
             'web.get', 'web.search' => 'tools.web',
             'files.list' => 'tools.files',
             'sql.read' => 'tools.sql.read',
+            'system.health' => 'admin.system',
             'code.project.create', 'code.workspace.list', 'code.file.read',
             'code.file.write', 'code.php.lint', 'code.project.analyze',
             'code.workspace.snapshot', 'code.workspace.diff', 'code.workspace.snapshots', 'code.workspace.restore' => 'tools.files',
