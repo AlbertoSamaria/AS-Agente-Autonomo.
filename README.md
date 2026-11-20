@@ -19,7 +19,7 @@ Base evoluída do SA com autenticação/RBAC, planner, dependências, memória s
 4. Configurar DB.
 5. Criar o primeiro admin:
    `php -r "echo password_hash('TroqueEstaSenha', PASSWORD_DEFAULT), PHP_EOL;" `
-   Depois inserir o hash na tabela `users`.
+   Depois inserir o hash na tabela `users` e definir `email_verified_at = NOW()` para a conta inicial de administração.
 6. Abrir `http://localhost/SA/`.
 
 ## Contas e autenticação
