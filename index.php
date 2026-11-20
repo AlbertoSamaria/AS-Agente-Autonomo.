@@ -27,7 +27,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>SA — Agente Autónomo</title>
+    <title>SA</title>
 
     <link rel="stylesheet" href="public/assets/app.css">
     <link rel="stylesheet" href="public/assets/features.css">
@@ -96,7 +96,6 @@ $canWriteMemories = $user && RBAC::can('memory.write');
 
                 <div>
                     <strong>SA</strong>
-                    <span>Agente Autónomo</span>
                 </div>
 
             </div>
@@ -230,7 +229,6 @@ $canWriteMemories = $user && RBAC::can('memory.write');
 
                     <div>
                         <h1>SA</h1>
-                        <p>Agente Autónomo</p>
                     </div>
 
                 </div>
@@ -239,6 +237,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                 <!-- Estado da IA -->
 
                 <div class="topbar-actions">
+                    <?php if ($isAdmin): ?>
                     <div class="status">
 
                         <span id="statusDot"></span>
@@ -248,6 +247,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                         </span>
 
                     </div>
+                    <?php endif; ?>
 
                     <button id="themeToggle" class="theme-toggle" type="button" aria-label="Mudar para tema claro" title="Mudar tema">
                         ☀️
