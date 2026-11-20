@@ -15,3 +15,10 @@
 .login-card #registerBtn{margin-top:10px}
 .login-card input:focus{outline:2px solid #718dca;outline-offset:1px}
 @media(max-width:420px){.login-card{padding:26px 20px}.login-card h1{font-size:23px}}
+
+/* Confirmação de e-mail e recuperação de conta. */
+.login-card #forgotView>p,.login-card #resetView>p{color:#8895b1;margin:8px 0 16px;font-size:13px;line-height:1.5}
+.login-card #forgotError,.login-card #resetError{color:#ff7777;margin-top:12px;font-size:12px;min-height:16px}
+.login-card .login-secondary{height:auto;width:100%;margin-top:10px;padding:10px 14px;border:1px solid #465779;background:#18243b;color:#dce7ff;font-size:13px}
+.login-card .login-secondary:hover{background:#223250}
+.login-card #registerBtn.hidden{display:none}
