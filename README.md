@@ -1,4 +1,4 @@
-# SA — Agente Autónomo 1.3.5
+# SA — Agente Autónomo 1.3.7
 
 Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, ModelRouter/fallback, streaming e Project Analyzer read-only.
 
@@ -19,8 +19,33 @@ Base evoluída do SA com autenticação/RBAC, planner, dependências, memória s
 4. Configurar DB.
 5. Criar o primeiro admin:
    `php -r "echo password_hash('TroqueEstaSenha', PASSWORD_DEFAULT), PHP_EOL;" `
-   Depois inserir o hash na tabela `users`.
+   Depois inserir o hash na tabela `users` e definir `email_verified_at = NOW()` para a conta inicial de administração.
 6. Abrir `http://localhost/SA/`.
+
+## Contas e autenticação
+- Qualquer visitante pode criar a sua própria conta na página inicial, através de **Criar conta**.
+- O registo pede nome, email e palavra-passe com pelo menos 10 caracteres.
+- Cada conta pública é criada como utilizador normal (`viewer`); o formulário nunca permite escolher funções administrativas.
+- As palavras-passe são guardadas com `password_hash()` e as tentativas de registo são limitadas por endereço IP.
+- O registo exige confirmação do e-mail antes do primeiro login. A recuperação de palavra-passe é feita por link temporário enviado para o e-mail confirmado.
+
+## Segurança de contas (SA 1.3.7)
+- Novas contas ficam pendentes até à confirmação do e-mail.
+- Links de confirmação expiram em 24 horas e são de utilização única.
+- A recuperação da palavra-passe usa links de utilização única com validade de 1 hora.
+- Contas existentes são marcadas como confirmadas pela migração para preservar o acesso.
+- Configura `APP_BASE_URL`, `MAIL_PROVIDER=resend`, `MAIL_FROM` e `RESEND_API_KEY` no ficheiro privado `.env`.
+- O domínio usado em `MAIL_FROM` tem de estar validado no Resend. Em alternativa, `MAIL_PROVIDER=php_mail` usa a função `mail()` do servidor, se estiver disponível.
+- Executa uma vez `database/migrations/20261120_account_email_verification_password_reset.sql` antes de activar esta versão numa base de dados existente.
+- O envio real depende da configuração do serviço de e-mail e de cURL (Resend).
+
+Exemplo de configuração (substitui pelos teus valores reais no `.env`, nunca no Git):
+```ini
+APP_BASE_URL=https://teu-dominio.com
+MAIL_PROVIDER=resend
+MAIL_FROM=SA <noreply@teu-dominio.com>
+RESEND_API_KEY=re_xxxxxxxxx
+```
 
 ## Worker
 No PowerShell:

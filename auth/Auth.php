@@ -52,7 +52,10 @@ final class Auth {
         self::start();
         $s=db()->prepare("SELECT * FROM users WHERE email=? AND active=1 LIMIT 1");
         $s->execute([$email]); $u=$s->fetch();
-        if(!$u || !password_verify($password,$u['password_hash'])) return false;
+        if(!$u || empty($u['email_verified_at']) || !password_verify($password,$u['password_hash'])) return false;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
         $_SESSION['sa_user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role'=>$u['role']];
         self::csrfToken();
         self::audit('login', ['email' => $u['email']], (int)$u['id']);

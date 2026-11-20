@@ -6,8 +6,22 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin','manager','operator','viewer') NOT NULL DEFAULT 'viewer',
     active TINYINT(1) NOT NULL DEFAULT 1,
+    email_verified_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS account_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    purpose ENUM('verify_email','password_reset') NOT NULL,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_account_tokens_user_purpose(user_id, purpose, used_at),
+    INDEX idx_account_tokens_expiry(expires_at),
+    CONSTRAINT fk_account_tokens_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS roles_permissions (

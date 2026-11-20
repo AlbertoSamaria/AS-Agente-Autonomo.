@@ -10,6 +10,7 @@ require_once dirname(__DIR__) . '/services/agent/ContextManager.php';
 require_once dirname(__DIR__) . '/services/tools/ToolRegistry.php';
 require_once dirname(__DIR__) . '/services/agent/Orchestrator.php';
 require_once dirname(__DIR__) . '/services/security/RateLimiter.php';
+require_once dirname(__DIR__) . '/services/auth/AccountTokenService.php';
 
 $passed = 0;
 $failed = 0;
@@ -120,6 +121,14 @@ test('Orchestrator rejeita ferramentas não autorizadas e JSON inválido', funct
     same(null, $method->invoke($orchestrator, '{"tool":"system.shell","arguments":{}}'));
     same(null, $method->invoke($orchestrator, 'isto não é JSON'));
     same(null, $method->invoke($orchestrator, " ` ` `json\n{\"tool\":\"task.list\",\"arguments\":{}}\n` ` `"));
+});
+
+test('AccountTokenService gera tokens aleatórios e guarda apenas hash SHA-256', function (): void {
+    $token = AccountTokenService::generate();
+    same(64, strlen($token));
+    truthy((bool)preg_match('/^[a-f0-9]{64}$/', $token));
+    same(64, strlen(AccountTokenService::hash($token)));
+    truthy(AccountTokenService::hash($token) !== $token);
 });
 
 test('RateLimiter cria identidades estáveis por utilizador', function (): void {

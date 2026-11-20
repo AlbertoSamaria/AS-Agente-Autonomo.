@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-const SA_VERSION = '1.3.5';
+const SA_VERSION = '1.3.7';
 const SA_TIMEZONE = 'Africa/Luanda';
 
 date_default_timezone_set(SA_TIMEZONE);

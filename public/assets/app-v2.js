@@ -52,6 +52,141 @@ async function loginNow(){
 }
 document.getElementById('loginBtn')?.addEventListener('click',loginNow);
 document.getElementById('password')?.addEventListener('keydown',e=>{if(e.key==='Enter')loginNow();});
+
+const loginView=document.getElementById('loginView');
+const registerView=document.getElementById('registerView');
+const forgotView=document.getElementById('forgotView');
+const resetView=document.getElementById('resetView');
+const authViews=[loginView,registerView,forgotView,resetView].filter(Boolean);
+const resetToken=new URLSearchParams(window.location.search).get('reset')||'';
+
+function showAuthView(view){
+ authViews.forEach(section=>section.classList.toggle('hidden',section.id!==view+'View'));
+ const targets={login:'email',register:'registerName',forgot:'forgotEmail',reset:'resetPassword'};
+ document.getElementById(targets[view]||'email')?.focus();
+}
+document.getElementById('showRegisterBtn')?.addEventListener('click',()=>showAuthView('register'));
+document.getElementById('showForgotBtn')?.addEventListener('click',()=>{
+ const loginEmail=document.getElementById('email')?.value||'';
+ document.getElementById('forgotEmail').value=loginEmail;
+ showAuthView('forgot');
+});
+document.getElementById('showLoginBtn')?.addEventListener('click',()=>showAuthView('login'));
+document.getElementById('forgotBackBtn')?.addEventListener('click',()=>showAuthView('login'));
+document.getElementById('resetBackBtn')?.addEventListener('click',()=>showAuthView('login'));
+if(resetToken){showAuthView('reset');}
+
+async function registerNow(){
+ const button=document.getElementById('registerBtn');
+ const error=document.getElementById('registerError');
+ const name=document.getElementById('registerName')?.value.trim()||'';
+ const email=document.getElementById('registerEmail')?.value.trim()||'';
+ const password=document.getElementById('registerPassword')?.value||'';
+ const confirmation=document.getElementById('registerPasswordConfirm')?.value||'';
+ const resend=document.getElementById('resendVerificationBtn');
+ if(!button||!error)return;
+ error.textContent='';
+ resend?.classList.add('hidden');
+ if(password!==confirmation){error.textContent='As palavras-passe não coincidem.';return;}
+ if(password.length<10){error.textContent='A palavra-passe deve ter pelo menos 10 caracteres.';return;}
+ button.disabled=true;
+ try{
+   const response=await fetch('api/auth.php?action=register',{
+     method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({name,email,password,password_confirmation:confirmation})
+   });
+   const data=await response.json();
+   if(!response.ok||!data.success)throw new Error(data.error||'Não foi possível criar a conta.');
+   error.textContent=data.message||'Conta criada. Confirma o teu e-mail antes de iniciar sessão.';
+   resend?.classList.remove('hidden');
+   button.classList.add('hidden');
+ }catch(exception){
+   error.textContent=exception.message||'Erro ao criar a conta.';
+ }finally{
+   button.disabled=false;
+ }
+}
+document.getElementById('registerBtn')?.addEventListener('click',registerNow);
+
+async function resendVerification(){
+ const button=document.getElementById('resendVerificationBtn');
+ const error=document.getElementById('registerError');
+ const email=document.getElementById('registerEmail')?.value.trim()||'';
+ if(!email){error.textContent='Indica primeiro o teu e-mail.';return;}
+ button.disabled=true;
+ try{
+   const response=await fetch('api/auth.php?action=resend_verification',{
+     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})
+   });
+   const data=await response.json();
+   if(!response.ok||!data.success)throw new Error(data.error||'Não foi possível reenviar.');
+   error.textContent=data.message||'Se existir uma conta por confirmar, será enviado um novo link.';
+ }catch(exception){error.textContent=exception.message||'Erro ao reenviar a confirmação.';}
+ finally{button.disabled=false;}
+}
+document.getElementById('resendVerificationBtn')?.addEventListener('click',resendVerification);
+
+async function requestPasswordReset(){
+ const button=document.getElementById('requestResetBtn');
+ const error=document.getElementById('forgotError');
+ const email=document.getElementById('forgotEmail')?.value.trim()||'';
+ if(!email){error.textContent='Indica o teu e-mail.';return;}
+ button.disabled=true;error.textContent='';
+ try{
+   const response=await fetch('api/auth.php?action=request_reset',{
+     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})
+   });
+   const data=await response.json();
+   if(!response.ok||!data.success)throw new Error(data.error||'Não foi possível processar o pedido.');
+   error.textContent=data.message||'Se existir uma conta confirmada, enviaremos as instruções.';
+ }catch(exception){error.textContent=exception.message||'Erro ao pedir recuperação.';}
+ finally{button.disabled=false;}
+}
+document.getElementById('requestResetBtn')?.addEventListener('click',requestPasswordReset);
+
+async function saveNewPassword(){
+ const button=document.getElementById('resetPasswordBtn');
+ const error=document.getElementById('resetError');
+ const password=document.getElementById('resetPassword')?.value||'';
+ const confirmation=document.getElementById('resetPasswordConfirm')?.value||'';
+ if(!button||!error)return;
+ error.textContent='';
+ if(!resetToken){error.textContent='O link de recuperação não é válido.';return;}
+ if(password.length<10){error.textContent='A palavra-passe deve ter pelo menos 10 caracteres.';return;}
+ if(password!==confirmation){error.textContent='As palavras-passe não coincidem.';return;}
+ button.disabled=true;
+ try{
+   const response=await fetch('api/auth.php?action=reset_password',{
+     method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({token:resetToken,password,password_confirmation:confirmation})
+   });
+   const data=await response.json();
+   if(!response.ok||!data.success)throw new Error(data.error||'Não foi possível alterar a palavra-passe.');
+   history.replaceState({},'',window.location.pathname);
+   showAuthView('login');
+   document.getElementById('loginError').textContent=data.message||'Palavra-passe actualizada. Já podes iniciar sessão.';
+ }catch(exception){error.textContent=exception.message||'Erro ao alterar a palavra-passe.';}
+ finally{button.disabled=false;}
+}
+document.getElementById('resetPasswordBtn')?.addEventListener('click',saveNewPassword);
+
+['registerName','registerEmail','registerPassword','registerPasswordConfirm'].forEach(id=>{
+ document.getElementById(id)?.addEventListener('keydown',event=>{
+   if(event.key==='Enter'){event.preventDefault();registerNow();}
+ });
+});
+['forgotEmail'].forEach(id=>{
+ document.getElementById(id)?.addEventListener('keydown',event=>{
+   if(event.key==='Enter'){event.preventDefault();requestPasswordReset();}
+ });
+});
+['resetPassword','resetPasswordConfirm'].forEach(id=>{
+ document.getElementById(id)?.addEventListener('keydown',event=>{
+   if(event.key==='Enter'){event.preventDefault();saveNewPassword();}
+ });
+});
+
 document.getElementById('logoutBtn')?.addEventListener('click',async e=>{
  const button=e.currentTarget;
  button.disabled=true;

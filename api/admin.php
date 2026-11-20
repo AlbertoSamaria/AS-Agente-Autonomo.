@@ -103,7 +103,7 @@ try {
             json_response(['success' => false, 'error' => 'Já existe um utilizador com este email.'], 409);
         }
 
-        $insert = db()->prepare('INSERT INTO users (name, email, password_hash, role, active) VALUES (?, ?, ?, ?, 1)');
+        $insert = db()->prepare('INSERT INTO users (name, email, password_hash, role, active, email_verified_at) VALUES (?, ?, ?, ?, 1, NOW())');
         $insert->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), $role]);
         $createdId = (int)db()->lastInsertId();
 
