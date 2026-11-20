@@ -1,4 +1,4 @@
-# SA — Agente Autónomo 1.3.6
+# SA — Agente Autónomo 1.3.7
 
 Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, ModelRouter/fallback, streaming e Project Analyzer read-only.
 
