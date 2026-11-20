@@ -270,6 +270,9 @@ Memórias relevantes:';
              * - A intenção do utilizador for explícita.
              */
             $toolExecuted = false;
+
+            // O diagnóstico técnico é uma capacidade administrativa: a autorização
+            // é verificada antes da execução da ferramenta e nunca pelo frontend.
             if ($toolRequest !== null) {
                 $toolName = $toolRequest['tool'];
                 $arguments = $toolRequest['arguments'];
