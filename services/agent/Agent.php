@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 require_once dirname(__DIR__) . '/ai/Ollama.php';
 require_once dirname(__DIR__) . '/router/ModelRouter.php';
 require_once __DIR__ . '/ContextManager.php';
+require_once __DIR__ . '/Orchestrator.php';
 require_once dirname(__DIR__) . '/memory/Memory.php';
 require_once dirname(__DIR__).'/rag/EmbeddingService.php';
 require_once dirname(__DIR__).'/rag/Retriever.php';
@@ -397,36 +398,54 @@ Produz uma resposta normal, clara e útil.';
                     'tool_result' => $resultJson ?: '{}',
                 ];
 
-                $finalMessages = [
-                    [
-                        'role' => 'system',
-                        'content' =>
-                            'Responde em português. ' .
-                            'Explica o resultado da operação de forma ' .
-                            'clara e objectiva. Não inventes resultados. ' .
-                            'Resultado da ferramenta: ' . $resultJson,
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => $input,
-                    ],
-                ];
-
-                $finalResponse = (new ModelRouter())->chat(
-                    $finalMessages,
-                    'general'
+                $orchestration = (new Orchestrator($this->tools))->continueAfterTool(
+                    $input,
+                    $messages,
+                    $toolName,
+                    $arguments,
+                    $result,
+                    (int) $userId,
+                    fn(string $name): bool => $this->hasPermission($userId, $this->tools->permission($name)),
+                    fn(string $name): bool => $this->hasExplicitIntent($input, $name),
+                    function (string $name, array $args, array $toolResult) use ($userId): void { $this->audit($userId, $name, $args, $toolResult); },
+                    function (string $name, array $args) use ($userId, $runId): array {
+                        $approvalId = $this->approvals->create(
+                            (int) $userId,
+                            $runId,
+                            'tool',
+                            $name,
+                            $args,
+                            'Ação sensível solicitada durante uma cadeia de execução.'
+                        );
+                        db()->prepare(
+                            "UPDATE agent_runs SET status = 'waiting_approval', result = ? WHERE id = ?"
+                        )->execute(['Approval #' . $approvalId, $runId]);
+                        return [
+                            'success' => true,
+                            'pending_approval' => true,
+                            'approval_id' => $approvalId,
+                            'content' => "Ação pendente de aprovação humana. Pedido #{$approvalId}.",
+                        ];
+                    }
                 );
 
-                $content = trim(
-                    (string) (
-                        $finalResponse['message']['content']
-                        ?? $resultJson
-                    )
-                );
-
-                if ($content === '') {
-                    $content = $resultJson;
+                if (!empty($orchestration['pending_approval'])) {
+                    return [
+                        'success' => true,
+                        'content' => (string) ($orchestration['content'] ?? 'Ação pendente de aprovação.'),
+                        'approval_id' => (int) ($orchestration['approval_id'] ?? 0),
+                    ];
                 }
+
+                $content = trim((string) ($orchestration['content'] ?? ''));
+                if ($content === '') {
+                    $content = $resultJson ?: 'A ferramenta foi executada sem devolver conteúdo.';
+                }
+                $verificationContext = array_merge(
+                    $verificationContext,
+                    $orchestration['evidence'] ?? []
+                );
+                $toolExecuted = !empty($orchestration['executed']);
             }
 
             if (
