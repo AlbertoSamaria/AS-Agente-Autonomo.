@@ -14,11 +14,11 @@ if ($token !== '') {
         $pdo->beginTransaction();
         $userId = AccountTokenService::consume($pdo, $token, 'verify_email');
         if ($userId) {
-            $statement = $pdo->prepare(
-                'UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ? AND active = 1'
-            );
+            $statement = $pdo->prepare('SELECT id FROM users WHERE id = ? AND active = 1 LIMIT 1 FOR UPDATE');
             $statement->execute([$userId]);
-            if ($statement->rowCount() >= 0) {
+            if ($statement->fetch()) {
+                $pdo->prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?')
+                    ->execute([$userId]);
                 $pdo->prepare(
                     "UPDATE account_tokens SET used_at = NOW() WHERE user_id = ? AND purpose = 'verify_email' AND used_at IS NULL"
                 )->execute([$userId]);
