@@ -2,8 +2,19 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/config.php';
+require_once dirname(__DIR__) . '/auth/Auth.php';
 require_once dirname(__DIR__) . '/services/ai/Ollama.php';
 require_once dirname(__DIR__) . '/services/ai/LlamaCpp.php';
+
+Auth::start();
+$user = Auth::requireLogin();
+
+if (($user['role'] ?? '') !== 'admin') {
+    json_response([
+        'success' => false,
+        'error' => 'Acesso reservado ao administrador.',
+    ], 403);
+}
 
 try {
     $provider = strtolower((string) env('LLM_PROVIDER', 'ollama'));
