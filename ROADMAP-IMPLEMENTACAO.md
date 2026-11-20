@@ -4,6 +4,8 @@ Esta versão parte do `SA-1.2.1-TESTE.zip`. O projecto já continha autenticaç�
 
 ## Implementado nesta versão
 
+- **Orquestrador multi-etapa inicial:** após a primeira ferramenta, o SA pode encadear até quatro operações numa execução, voltar a validar intenção e permissões, auditar cada passo, detectar chamadas repetidas e pedir aprovação para operações sensíveis. A autonomia continua limitada ao catálogo de ferramentas autorizado; não executa código arbitrário.
+
 - **Project Analyzer inicial:** ferramenta `code.project.analyze`, read-only, limitada ao workspace do utilizador. Enumera ficheiros, extensões, tecnologias/frameworks por manifests e indicadores heurísticos (`eval`, execução de comandos, padrões SQL e TODO/FIXME). Tem limites de ficheiros/tamanho e ignora pastas de dependências e links simbólicos.
 - **Workspace Versioning:** ferramentas `code.workspace.snapshot`, `code.workspace.snapshots`, `code.workspace.diff` e `code.workspace.restore`; cópias privadas por utilizador, exclusão de segredos/dependências/links simbólicos, limites de 300 ficheiros e 10 MB, salvaguarda automática antes do restauro e aprovação obrigatória para restaurar.
 - **Integração com o agente:** registo das ferramentas, permissão `tools.files`, descrição no prompt e validação de intenção explícita.
@@ -14,17 +16,17 @@ Esta versão parte do `SA-1.2.1-TESTE.zip`. O projecto já continha autenticaç�
 | Capítulo | Estado nesta versão | Observação |
 |---|---|---|
 | 1. Objectivo principal | Parcial | Fundação de agente e workspace existentes; autonomia de ponta a ponta ainda não concluída. |
-| 2. Raciocínio e inteligência | Parcial | Planner, contexto e auto-verificação existentes; raciocínio multi-etapa persistente e retoma robusta por concluir. |
+| 2. Raciocínio e inteligência | Parcial (melhorado) | Planner, contexto, auto-verificação e orquestração limitada de ferramentas; planeamento persistente, recuperação de falhas e retoma por concluir. |
 | 3. Coding Agent | Parcial | Criação/leitura/escrita de projectos e lint PHP; refactor multi-ficheiro avançado, testes multi-linguagem e dependências por concluir. |
 | 4. Web/frameworks | Parcial | Geração multi-ficheiro; matrizes de frameworks e testes reais por stack por concluir. |
 | 5. Execução real/sandbox | Não concluído | Não executar código arbitrário no processo PHP/Windows. Requer runner isolado (Docker/VM), limites e política de rede. |
 | 6. Project Analyzer | Implementação inicial | Análise estática heurística read-only; SAST/AST profundo e auditoria de dependências por concluir. |
 | 7. Workspace Manager | Parcial (melhorado) | Workspace privado, criação/leitura/escrita, snapshots, diff textual e restauro com aprovação; diff visual integrado na UI, exportação ZIP e Git por concluir. |
-| 8. Multi-agent | Não concluído | Não existe ainda orquestrador de agentes especializados validado. |
+| 8. Multi-agent | Não concluído | Existe orquestrador de ferramentas de agente único; agentes especializados independentes e coordenação multi-agent ainda não implementados. |
 | 9. Memória avançada | Parcial | Memória privada, embeddings e RAG existentes; vector store dedicado, UI completa de gestão e políticas de retenção por concluir. |
 | 10. Modelos | Parcial | Ollama/llama.cpp, fallback, registry e logs; APIs externas e routing calibrado por benchmark por concluir. |
 | 11. Pesquisa/documentação | Parcial | WebTool existente; fontes robustas, documentação oficial versionada e citações consistentes por concluir. |
-| 12. Segurança/autonomia | Parcial (melhorado) | RBAC, aprovação com execução efectiva, rate limits e logs; níveis de autonomia formais e sandbox por concluir. |
+| 12. Segurança/autonomia | Parcial (melhorado) | RBAC, aprovações, rate limits, auditoria e cadeia de ferramentas limitada; níveis de autonomia formais e sandbox por concluir. |
 | 13. Interface | Parcial | Chat responsivo, SSE, histórico, upload, temas e tarefas existentes; painel completo de execução e diff por concluir. |
 | 14. Testes/qualidade | Parcial | Health endpoint e lint PHP; suites automatizadas, integração, segurança e carga por concluir. |
 | 15. Infraestrutura | Parcial | PHP/MySQL/XAMPP e serviços locais; deploy cloud e observabilidade por concluir. |
