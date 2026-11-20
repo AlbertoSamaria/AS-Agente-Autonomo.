@@ -48,11 +48,53 @@
 .user-account-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .user-account-actions{display:flex;gap:7px;margin-top:8px}
 .user-account .logout-btn,.user-account .admin-btn{padding:7px 9px;font-size:11px}
-.app.sidebar-open:after{position:fixed;inset:0;z-index:45;background:rgba(3,7,16,.62);content:""}
+/* Menu lateral responsivo: drawer real em ecrãs pequenos. */
+.app.sidebar-open:after{
+ position:fixed;inset:0;z-index:1000;
+ background:rgba(3,7,16,.62);content:"";
+}
 @media(max-width:720px){
- .sidebar{position:fixed;inset:0 auto 0 0;z-index:50;display:flex;width:min(300px,85vw);transform:translateX(-105%);transition:transform .2s ease;box-shadow:18px 0 45px rgba(0,0,0,.35)}
- .sidebar.open{transform:translateX(0)}
+ body{min-width:320px}
+ .app{height:100vh;height:100dvh;min-height:100vh;overflow:hidden}
+ .main{width:100%;min-width:0}
+ .topbar{min-height:64px;height:auto;padding:10px 12px;gap:8px}
+ .topbar>div:first-child{min-width:0;gap:8px}
+ .topbar h1{font-size:17px}
+ .topbar-actions{min-width:0;gap:7px}
+ .topbar .icon-btn{
+  display:grid;place-items:center;position:relative;z-index:1002;
+  flex:0 0 42px;width:42px;height:42px;border:1px solid #303a57;
+  border-radius:10px;background:#121a2e;color:#fff;cursor:pointer;
+  touch-action:manipulation
+ }
+ .sidebar{
+  position:fixed!important;inset:0 auto 0 0!important;z-index:1001!important;
+  display:flex!important;visibility:hidden;width:min(320px,88vw);
+  height:100vh;height:100dvh;max-height:100dvh;overflow-y:auto;
+  overscroll-behavior:contain;transform:translate3d(-105%,0,0);
+  transition:transform .22s ease,visibility .22s ease;
+  box-shadow:18px 0 45px rgba(0,0,0,.4);
+  padding:18px 16px calc(22px + env(safe-area-inset-bottom));
+ }
+ .sidebar.open{visibility:visible;transform:translate3d(0,0,0)}
+ .side-nav{flex:0 0 auto}
+ .conversation-history{min-height:90px;overflow:auto}
+ .app.sidebar-open:after{pointer-events:auto}
  .navigation-panel{padding:12px}
- .navigation-panel-card{max-height:calc(100vh - 24px)}
+ .navigation-panel-card{width:100%;max-height:calc(100dvh - 24px);overflow:auto}
  .navigation-panel-content{padding:16px}
+ .chat{min-height:0;padding:20px 14px}
+ .composer{width:calc(100% - 20px);gap:7px}
+ .composer textarea{min-width:0}
+}
+@media(max-width:480px){
+ .topbar{padding:8px}
+ .topbar-actions{gap:6px}
+ .topbar .icon-btn{width:40px;height:40px;flex-basis:40px}
+ .theme-toggle{width:38px;height:38px;flex-basis:38px}
+ .status{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .admin-btn{padding:8px;font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){
+ .sidebar{transition:none!important}
 }
