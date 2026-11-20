@@ -48,14 +48,28 @@ final class ModelRouter
                 $emitted = '';
                 $startedAt = hrtime(true);
                 try {
-                    $response = $this->client($provider)->chatStream(
-                        $messages,
-                        static function (string $token) use (&$emitted, $onToken): void {
+                    // O Groq GPT-OSS possui suporte nativo a ferramentas.
+                    // Como o SA já executa web.search localmente e envia os
+                    // resultados no contexto, não devemos iniciar outro ciclo
+                    // de tool-calling no fallback. Mantemos o fallback
+                    // não-streaming e entregamos a resposta ao SSE de uma vez.
+                    if ($provider === 'groq') {
+                        $response = $this->client($provider)->chat($messages, $model);
+                        $token = (string) ($response['message']['content'] ?? '');
+                        if ($token !== '') {
                             $emitted .= $token;
                             $onToken($token);
-                        },
-                        $model
-                    );
+                        }
+                    } else {
+                        $response = $this->client($provider)->chatStream(
+                            $messages,
+                            static function (string $token) use (&$emitted, $onToken): void {
+                                $emitted .= $token;
+                                $onToken($token);
+                            },
+                            $model
+                        );
+                    }
                     $elapsedMs = (int) round((hrtime(true) - $startedAt) / 1000000);
                     error_log('[SA ModelRouter] stream_success provider=' . $provider .
                         ' model=' . $model . ' purpose=' . $purpose .
@@ -147,6 +161,34 @@ final class ModelRouter
         ];
         [$setting, $default] = $settings[$provider];
         $configured = (string) env($setting, $default);
+
+        // Migração defensiva: bases de dados antigas podem ainda conter
+        // Gemini 2.5, mesmo quando o .env já foi atualizado.
+        if ($provider === 'gemini') {
+            $models = array_map(
+                static function (string $model): string {
+                    $normalized = preg_replace('#^models/#', '', trim($model))
+                        ?: 'gemini-3.8-flash';
+
+                    return in_array(strtolower($normalized), [
+                        'gemini-2.5-flash',
+                        'gemini-2.5-flash-latest',
+                    ], true)
+                        ? 'gemini-3.8-flash'
+                        : $normalized;
+                },
+                $models
+            );
+
+            if (in_array(strtolower(trim($configured)), [
+                'gemini-2.5-flash',
+                'gemini-2.5-flash-latest',
+            ], true)) {
+                $configured = 'gemini-3.8-flash';
+            }
+        }
+
+        $models = array_values(array_unique($models));
 
         if ($models === []) {
             return [$configured];
