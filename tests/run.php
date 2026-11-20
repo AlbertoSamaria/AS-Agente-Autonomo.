@@ -138,32 +138,6 @@ test('RateLimiter usa identidade de IP anonimizada para visitantes', function ()
 
 
 require_once dirname(__DIR__) . '/services/planner/Planner.php';
-
-test('Planner valida tarefas e preserva dependências válidas', function (): void {
-    $tasks = Planner::validateTasks([
-        ['title'=>'Preparar ambiente','description'=>'','priority'=>'high','depends_on'=>[]],
-        ['title'=>'Executar testes','description'=>'','priority'=>'medium','depends_on'=>[0]],
-    ]);
-    same([0], $tasks[1]['depends_on']);
-    same('Preparar ambiente', $tasks[0]['title']);
-});
-
-test('Planner rejeita dependências circulares e referências inválidas', function (): void {
-    throws(static fn() => Planner::validateTasks([
-        ['title'=>'A','depends_on'=>[1]],
-        ['title'=>'B','depends_on'=>[0]],
-    ]), InvalidArgumentException::class);
-    throws(static fn() => Planner::validateTasks([
-        ['title'=>'A','depends_on'=>[4]],
-    ]), InvalidArgumentException::class);
-});
-
-test('Planner rejeita planos vazios e tarefas sem título', function (): void {
-    throws(static fn() => Planner::validateTasks([]), InvalidArgumentException::class);
-    throws(static fn() => Planner::validateTasks([['title'=>'']]), InvalidArgumentException::class);
-});
-
-require_once dirname(__DIR__) . '/services/planner/Planner.php';
 require_once dirname(__DIR__) . '/services/planner/PlanWorker.php';
 
 test('Planner valida tarefas e preserva dependências válidas', function (): void {
