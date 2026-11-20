@@ -125,6 +125,7 @@ FERRAMENTAS DISPONÍVEIS:
 - web.search: pesquisar palavras-chave na Internet.
 - files.list: listar ficheiros enviados.
 - sql.read: executar uma consulta SQL de leitura.
+- system.health: verificar o estado técnico do SA (apenas administrador). Argumentos: {}.
 - code.project.create: criar um projecto com vários ficheiros no workspace privado. Argumentos: {"name":"nome-projecto","files":{"index.php":"conteúdo","assets/app.css":"conteúdo"}}.
 - code.workspace.list: listar pastas e ficheiros do workspace. Argumentos: {"path":""}.
 - code.file.read: ler um ficheiro do workspace. Argumentos: {"path":"projecto/index.php"}.
@@ -592,6 +593,11 @@ Produz uma resposta normal, clara e útil.';
 
             'sql.read' => (bool) preg_match(
                 '/\b(consulta SQL|executa SQL|consulta a base de dados|consulta à base de dados|executa uma consulta à base de dados)\b/iu',
+                $input
+            ),
+
+            'system.health' => (bool) preg_match(
+                '/\b(verifica|verificar|diagnostica|diagnosticar|mostra|mostrar|consulta|consultar)\b.*\b(estado|saúde|saude|sistema|servidor|configuração|configuracao)\b/iu',
                 $input
             ),
 
