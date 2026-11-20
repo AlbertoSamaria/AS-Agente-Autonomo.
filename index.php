@@ -138,12 +138,13 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                 </div>
             </section>
 
-            <!-- Capacidades -->
+            <?php if ($isAdmin): ?>
+            <!-- Capacidades técnicas: visíveis apenas para administradores. -->
 
             <div class="side-section">
 
                 <div class="side-title">
-                    Capacidades
+                    Capacidades administrativas
                 </div>
 
                 <div class="cap">
@@ -175,6 +176,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                 </div>
 
             </div>
+            <?php endif; ?>
 
 
             <!-- Informação do utilizador -->
