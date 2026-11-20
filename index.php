@@ -84,7 +84,7 @@ $canWriteMemories = $user && RBAC::can('memory.write');
              SIDEBAR
         ====================================================== -->
 
-        <aside class="sidebar">
+        <aside id="sidebar" class="sidebar">
 
             <!-- Marca -->
 
@@ -223,6 +223,8 @@ $canWriteMemories = $user && RBAC::can('memory.write');
                         class="icon-btn"
                         type="button"
                         aria-label="Abrir menu"
+                        aria-controls="sidebar"
+                        aria-expanded="false"
                     >
                         ☰
                     </button>
