@@ -1,4 +1,4 @@
-# SA — Agente Autónomo 1.3.5
+# SA — Agente Autónomo 1.3.6
 
 Base evoluída do SA com autenticação/RBAC, planner, dependências, memória semântica, RAG, scheduler/worker, notificações, ferramentas com permissões, aprovações, ModelRouter/fallback, streaming e Project Analyzer read-only.
 
@@ -21,6 +21,13 @@ Base evoluída do SA com autenticação/RBAC, planner, dependências, memória s
    `php -r "echo password_hash('TroqueEstaSenha', PASSWORD_DEFAULT), PHP_EOL;" `
    Depois inserir o hash na tabela `users`.
 6. Abrir `http://localhost/SA/`.
+
+## Contas e autenticação
+- Qualquer visitante pode criar a sua própria conta na página inicial, através de **Criar conta**.
+- O registo pede nome, email e palavra-passe com pelo menos 10 caracteres.
+- Cada conta pública é criada como utilizador normal (`viewer`); o formulário nunca permite escolher funções administrativas.
+- As palavras-passe são guardadas com `password_hash()` e as tentativas de registo são limitadas por endereço IP.
+- O registo inicia a sessão automaticamente. A verificação de email não está activada nesta versão.
 
 ## Worker
 No PowerShell:
