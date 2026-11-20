@@ -136,5 +136,39 @@ test('RateLimiter usa identidade de IP anonimizada para visitantes', function ()
     truthy(!str_contains($identity, '203.0.113.10'));
 });
 
+
+require_once dirname(__DIR__) . '/services/planner/Planner.php';
+require_once dirname(__DIR__) . '/services/planner/PlanWorker.php';
+
+test('Planner valida tarefas e preserva dependências válidas', function (): void {
+    $tasks = Planner::validateTasks([
+        ['title'=>'Preparar ambiente','description'=>'','priority'=>'high','depends_on'=>[]],
+        ['title'=>'Executar testes','description'=>'','priority'=>'medium','depends_on'=>[0]],
+    ]);
+    same([0], $tasks[1]['depends_on']);
+    same('Preparar ambiente', $tasks[0]['title']);
+});
+
+test('Planner rejeita dependências circulares e referências inválidas', function (): void {
+    throws(static fn() => Planner::validateTasks([
+        ['title'=>'A','depends_on'=>[1]],
+        ['title'=>'B','depends_on'=>[0]],
+    ]), InvalidArgumentException::class);
+    throws(static fn() => Planner::validateTasks([
+        ['title'=>'A','depends_on'=>[4]],
+    ]), InvalidArgumentException::class);
+});
+
+test('Planner rejeita planos vazios e tarefas sem título', function (): void {
+    throws(static fn() => Planner::validateTasks([]), InvalidArgumentException::class);
+    throws(static fn() => Planner::validateTasks([['title'=>'']]), InvalidArgumentException::class);
+});
+
+test('PlanWorker limita o tamanho dos resultados', function (): void {
+    $output = PlanWorker::limitOutput(str_repeat('x', 21000));
+    truthy(mb_strlen($output) < 20500);
+    truthy(str_contains($output, 'truncado'));
+});
+
 fwrite(STDOUT, "\nResultado: {$passed} passaram; {$failed} falharam.\n");
 exit($failed === 0 ? 0 : 1);
