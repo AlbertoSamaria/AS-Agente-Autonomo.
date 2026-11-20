@@ -603,15 +603,25 @@ navigationPanel?.addEventListener('click',event=>{
  if(event.target===navigationPanel)closeNavigationPanel();
  if(event.target.closest('[data-prompt]'))closeNavigationPanel();
 });
-menuBtn?.addEventListener('click',()=>{
- sidebar?.classList.toggle('open');
- app?.classList.toggle('sidebar-open',sidebar?.classList.contains('open'));
+function setMobileSidebar(open){
+ if(!sidebar||!app)return;
+ sidebar.classList.toggle('open',Boolean(open));
+ app.classList.toggle('sidebar-open',Boolean(open));
+ menuBtn?.setAttribute('aria-expanded',String(Boolean(open)));
+}
+menuBtn?.addEventListener('click',event=>{
+ event.preventDefault();
+ event.stopPropagation();
+ setMobileSidebar(!sidebar?.classList.contains('open'));
 });
 app?.addEventListener('click',event=>{
- if(app.classList.contains('sidebar-open')&&!sidebar?.contains(event.target)&&event.target!==menuBtn){
-   sidebar?.classList.remove('open');
-   app.classList.remove('sidebar-open');
+ const clickedMenuButton=event.target instanceof Element&&event.target.closest('#menuBtn');
+ if(app.classList.contains('sidebar-open')&&!sidebar?.contains(event.target)&&!clickedMenuButton){
+   setMobileSidebar(false);
  }
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&sidebar?.classList.contains('open'))setMobileSidebar(false);
 });
 function closeActionMenu(){
  actionMenu?.classList.add('hidden');
@@ -905,4 +915,4 @@ document.getElementById('newChat')?.addEventListener('click',()=>{
 if(window.SA_USER){const userInfoName=document.getElementById('userInfoName');if(userInfoName)userInfoName.textContent=`${SA_USER.name} · ${SA_USER.role}`;}
 if(window.SA_USER)loadConversationList();
 async function health(){const statusDot=document.getElementById('statusDot');const statusText=document.getElementById('statusText');try{const response=await fetch('api/health.php');if(!response.ok)throw new Error('HTTP '+response.status);const d=await response.json();const labels={'ollama':'Ollama','llama.cpp':'llama.cpp','gemini':'Gemini','groq':'Groq'};const provider=d.provider||'ollama';const service=d.providers?.[provider]||d.ollama;const cloud=service?.cloud===true;const ready=cloud?Boolean(service?.configured):Boolean(service?.online);let status=cloud?(ready?'configurado':'sem chave'):(ready?'online':'offline');let overall=ready;if(d.fallback_enabled&&d.fallback_provider){const fallback=d.providers?.[d.fallback_provider];const fallbackReady=fallback?.cloud===true?Boolean(fallback?.configured):Boolean(fallback?.online);status+=` · fallback ${labels[d.fallback_provider]||d.fallback_provider} ${fallbackReady?'configurado':'indisponível'}`;overall=overall||fallbackReady;}if(statusDot)statusDot.className=overall?'online':'offline';if(statusText)statusText.textContent=`${labels[provider]||provider} ${status}`;}catch(e){if(statusDot)statusDot.className='offline';if(statusText)statusText.textContent='Backend indisponível';}}
-health();
+if(window.SA_USER && window.SA_USER.role==='admin')health();
